@@ -77,6 +77,15 @@ assert.equal(buscarLocal('POLLO')[0].n, 'Pechuga de pollo'); assert.equal(buscar
 assert.ok(buscarLocal('yogur gri').every((a) => a.n.toLowerCase().includes('griego')), 'varias palabras = todas deben aparecer');
 for (const a of BASE.filter((x) => !/Cerveza|Vino/.test(x.n) && x.u !== 'ud')) assert.ok(Math.abs(a.k - (a.p * 4 + a.c * 4 + a.f * 9)) <= a.k * 0.2 + 15, `${a.n}: kcal no cuadra con macros`);
 
+// desayuno por día: predeterminado + el propio de cada día
+const lunD = lun; assert.equal(L.fijoDia(d, lunD, 'desayuno').propio, false); assert.equal(L.fijoDia(d, lunD, 'desayuno').texto, d.menu.fijos.desayuno.texto);
+d.menu.semanas[0][2].desayuno = { t: 'Tostadas con aguacate', items: [['pan', 80], ['platano', 1]] };   // miércoles distinto
+const mie = L.addDays(lun, 2), fMie = L.fijoDia(d, mie, 'desayuno'); assert.equal(fMie.propio, true); assert.equal(fMie.texto, 'Tostadas con aguacate'); assert.equal(fMie.hora, d.menu.fijos.desayuno.hora, 'la hora sigue siendo la general');
+assert.notEqual(Math.round(L.totalDia(d, mie).k), Math.round(L.totalDia(d, L.addDays(lun, 1)).k), 'el desayuno propio cambia las calorías de ese día');
+d.menu.fijos.merienda.on = false; assert.equal(L.fijoDia(d, mie, 'merienda'), null, 'una comida desactivada no aparece');
+d.perfil.personas = 1; const cPropio = L.listaCompra(d, 0, lun); assert.equal(cPropio.avena, 300, 'avena: 6 días × 50 g (el miércoles lleva tostadas)'); assert.equal(cPropio.pan, 80 + 40 * 3, 'el pan del desayuno propio (80 g) se suma al de las 3 cenas con pan');
+delete d.menu.semanas[0][2].desayuno; d.menu.fijos.merienda.on = false; d.menu.fijos.media.on = true;
+
 // lista de la compra
 d.perfil.personas = 1;
 const c1 = L.listaCompra(d, 0, lun);

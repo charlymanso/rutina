@@ -76,13 +76,20 @@ export function repartoMacros(t) {
   return tot > 0 ? { p: Math.round((p / tot) * 100), c: Math.round((c / tot) * 100), f: Math.round((f / tot) * 100) } : null;
 }
 export const fijoOn = (data, clave) => { const f = data.menu.fijos[clave]; return f && f.on ? f : null; };
+// Desayuno, media mañana y merienda: hay un plato predeterminado (menu.fijos) y cada día puede tener el suyo (semana[i].desayuno…).
+export function fijoDia(data, d, clave) {
+  const f = fijoOn(data, clave); if (!f) return null;
+  const dm = diaMenu(data, d), propio = dm && dm[clave];
+  return propio ? { texto: propio.t, items: propio.items || [], hora: f.hora, propio: true } : { texto: f.texto, items: f.items || [], hora: f.hora, propio: false };
+}
+export const FIJAS = ['desayuno', 'media', 'merienda'];
 export const comidasDelDia = (data) => ['desayuno', 'media', 'merienda'].filter((c) => fijoOn(data, c)).concat(['comida', 'cena']);
 
 export function totalDia(data, d, { extras = true } = {}) {
   const dm = diaMenu(data, d); if (!dm) return null;
   let k = 0, p = 0, c = 0, f = 0, libre = false, completo = true;
   const suma = (s) => { k += s.k; p += s.p; c += s.c; f += s.f; if (!s.completo) completo = false; };
-  for (const cl of ['desayuno', 'media', 'merienda']) { const fj = fijoOn(data, cl); if (fj) suma(sumaItems(data, fj.items)); }
+  for (const cl of FIJAS) { const fj = fijoDia(data, d, cl); if (fj) suma(sumaItems(data, fj.items)); }
   for (const m of ['comida', 'cena']) {
     const pl = dm[m]; if (!pl) continue;
     if (pl.libre) { libre = true; k += data.perfil.libre.kcal; p += data.perfil.libre.prot; completo = false; continue; }
@@ -119,9 +126,9 @@ export function listaCompra(data, sel, desde = hoy()) {
   }
   const lun = addDays(lunesDe(desde), sel * 7), tot = {}, n = data.perfil.personas || 1;
   const suma = (id, q) => { tot[id] = (tot[id] || 0) + q * n; };
-  semanaDe(data, lun).forEach((dm) => {
+  semanaDe(data, lun).forEach((dm, i) => {
     for (const m of ['comida', 'cena']) { const pl = dm[m]; if (pl && !pl.libre) (pl.items || []).forEach(([id, q]) => suma(id, q)); }
-    for (const c of ['desayuno', 'media', 'merienda']) { const f = fijoOn(data, c); if (f) (f.items || []).forEach(([id, q]) => suma(id, q)); }
+    for (const c of FIJAS) { const f = fijoDia(data, addDays(lun, i), c); if (f) f.items.forEach(([id, q]) => suma(id, q)); }
   });
   return tot;
 }
