@@ -40,7 +40,7 @@ const num = (v, def = 0) => { const n = parseFloat(String(v).replace(',', '.'));
 
 /* ---------- estado ---------- */
 let data = emptyData();
-const S = { tab: 'hoy', semSel: 0, compSel: 2, gymOpen: null, update: null, updateOculto: false, upd: null, autoUpdate: false, saltarInicio: false, animar: false, version: '' };
+const S = { tab: 'hoy', semSel: 0, compSel: 2, gymOpen: null, update: null, updateOculto: false, upd: null, autoUpdate: false, saltarInicio: false, animar: false, version: '', auth: null, authMsg: '', authForm: { correo: '', clave: '', clave2: '' } };
 const root = document.getElementById('root');
 let saveTimer;
 function commit() {
@@ -74,7 +74,7 @@ function confirmSheet(title, msg, okLabel, onOk) {
   const s = sheet({ title, body: h('p', { class: 'mute' }, msg), save: okLabel, onSave: () => { onOk(); } });
   return s;
 }
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheets.length && sheets[sheets.length - 1].el.querySelector('header .btn.plain')) sheets[sheets.length - 1].close(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.auth && !sheets.length) { const a = document.getElementById('auth-atras'); if (a) a.click(); return; } if (e.key === 'Escape' && sheets.length && sheets[sheets.length - 1].el.querySelector('header .btn.plain')) sheets[sheets.length - 1].close(); });
 
 /* ---------- campos reutilizables ---------- */
 const field = (label, input) => h('label', { class: 'field' }, h('span', {}, label), input);
@@ -218,7 +218,7 @@ function bienvenida() {
       h('p', { class: 'mute small' }, 'Son solo una referencia. Puedes cambiarlos cuando quieras en Ajustes.'),
       h('button', { class: 'btn wide', onclick: () => aplicar(makeTemplate()) }, 'Empezar con un plan de ejemplo'),
       h('button', { class: 'btn sec wide', onclick: () => aplicar(emptyData()) }, 'Empezar en blanco'),
-      Nube.nubeActiva() ? h('button', { class: 'btn plain wide', onclick: () => abrirCuenta('entrar') }, 'Ya tengo una cuenta') : null] });
+      Nube.nubeActiva() ? h('button', { class: 'btn plain wide', onclick: () => irAuth('entrar') }, 'Ya tengo una cuenta') : null] });
 }
 
 /* ---------- acciones ---------- */
@@ -279,7 +279,7 @@ function saludo() {
 function recordatorioCuenta() {
   if (!Nube.nubeActiva() || Nube.haySesion() || (data.meta || {}).ocultarCuenta) return null;
   return h('div', { class: 'banner', role: 'note' }, h('span', { class: 'grow' }, 'Crea una cuenta para no perder tus datos y usar Rutina en otro ordenador.'),
-    h('button', { class: 'btn', onclick: () => abrirCuenta('entrar') }, 'Crear cuenta'),
+    h('button', { class: 'btn', onclick: () => irAuth('crear') }, 'Crear cuenta'),
     h('button', { class: 'btn plain', 'aria-label': 'Ocultar este aviso', onclick: () => { data.meta = data.meta || {}; data.meta.ocultarCuenta = true; guardarLocal(); } }, '✕'));
 }
 function viewHoy() {
@@ -418,7 +418,7 @@ function logo(px = 88) {
 const mostrarInicio = () => Nube.nubeActiva() && !data.perfil.listo && !Nube.haySesion() && !S.saltarInicio;
 // Después de entrar: si la cuenta ya tenía plan se carga solo; si es nueva, se pasa a la bienvenida.
 async function trasEntrar() {
-  S.nube = null; await Sync.sincronizar(); S.saltarInicio = true; render();
+  S.nube = null; S.auth = null; await Sync.sincronizar(); S.saltarInicio = true; render();
   if (!data.perfil.listo) bienvenida(); else toast('Sesión iniciada.');
 }
 function viewInicio() {
@@ -431,9 +431,9 @@ function viewInicio() {
   return h('div', { class: 'gate' }, h('div', { class: 'gate-card' },
     h('div', { class: 'gate-logo' }, logo(96)), h('h1', { class: 'gate-title' }, 'Rutina'), h('p', { class: 'gate-sub' }, 'Tus comidas, tu compra y tus entrenos.\nTu día, claro.'),
     h('div', { class: 'gate-actions' },
-      Nube.puedeGoogle() ? h('button', { class: 'btn big light', onclick: google }, 'Continuar con Google') : null,
-      h('button', { class: 'btn big', onclick: () => abrirCuenta('entrar', trasEntrar) }, 'Continuar con correo'),
-      h('button', { class: 'btn plain big', onclick: () => { S.saltarInicio = true; render(); bienvenida(); } }, 'Continuar como invitado'), msg, err),
+      Nube.puedeGoogle() ? botonGoogle(google) : null,
+      h('button', { class: 'btn big', id: 'gate-correo', onclick: () => irAuth('entrar') }, 'Continuar con correo'),
+      h('button', { class: 'btn plain big', id: 'gate-invitado', onclick: () => { S.saltarInicio = true; render(); bienvenida(); } }, 'Continuar como invitado'), msg, err),
     h('p', { class: 'gate-note' }, 'Como invitado, tus datos se guardan solo en este ordenador. Con una cuenta puedes usarla también en otros. ',
       h('a', { href: 'https://charlymanso.github.io/rutina/privacidad.html', target: '_blank', rel: 'noopener' }, 'Privacidad'))));
 }
@@ -468,37 +468,79 @@ function cuentaGrupo() {
       h('div', { class: 'row' }, h('div', { class: 'grow' }, 'Estado', h('div', { class: 'sub', id: 'estado-nube' }, textoEstado())), h('button', { class: 'btn sec', onclick: () => Sync.sincronizar() }, 'Sincronizar ahora'))
     ] : [
       h('div', { class: 'row' }, h('div', { class: 'grow' }, 'Usa Rutina en otro ordenador', h('div', { class: 'sub' }, 'Con una cuenta, tu plan se guarda también en la nube y se sincroniza.')),
-        h('button', { class: 'btn', onclick: () => abrirCuenta('entrar') }, 'Entrar o crear cuenta'))]));
+        h('button', { class: 'btn', onclick: () => irAuth('entrar') }, 'Entrar o crear cuenta'))]));
 }
 
-function abrirCuenta(modo = 'entrar', alTerminar = null) {
-  const correo = h('input', { type: 'text', inputmode: 'email', autocomplete: 'email', placeholder: 'Correo electrónico' });
-  const clave = h('input', { type: 'password', autocomplete: modo === 'entrar' ? 'current-password' : 'new-password', placeholder: 'Contraseña (mínimo 8 caracteres)' });
-  const msg = h('div', { class: 'mute small', role: 'status' });
-  let sh;
-  const ocupado = (on) => sh.el.querySelectorAll('button').forEach((b) => { b.disabled = on; });
-  const terminar = async () => { sh.close(); if (alTerminar) return alTerminar(); S.nube = null; toast('Sesión iniciada.'); render(); Sync.sincronizar(); };
-  const accion = async (fn) => {
-    msg.textContent = ''; sh.err.textContent = ''; ocupado(true);
-    try { await fn(); } catch (e) { sh.err.textContent = e.message; } finally { ocupado(false); }
+/* Pantallas de cuenta (a pantalla completa, como en una app de verdad): entrar, crear, recuperar y confirmar. */
+const G = (px = 18) => {
+  const e = (t, a) => { const n = document.createElementNS(NS, t); for (const k in a) n.setAttribute(k, a[k]); return n; };
+  const svg = e('svg', { viewBox: '0 0 48 48', width: px, height: px, 'aria-hidden': 'true' });
+  svg.append(e('path', { fill: '#EA4335', d: 'M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z' }),
+    e('path', { fill: '#4285F4', d: 'M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z' }),
+    e('path', { fill: '#FBBC05', d: 'M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z' }),
+    e('path', { fill: '#34A853', d: 'M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z' }));
+  return svg;
+};
+const botonGoogle = (onclick) => h('button', { class: 'gbtn', id: 'auth-google', type: 'button', onclick }, G(18), h('span', {}, 'Continuar con Google'));
+
+function irAuth(pantalla) { sheets.slice().forEach((x) => x.close()); S.bienvenida = null; S.auth = pantalla; S.authMsg = ''; render(); }
+function cerrarAuth() { S.auth = null; render(); if (!data.perfil.listo && !mostrarInicio() && !Nube.haySesion()) bienvenida(); }
+
+function viewAuth() {
+  const f = S.authForm, p = S.auth, err = h('div', { class: 'err', role: 'alert' });
+  let ocupado = false;
+  const bloquear = (on) => document.querySelectorAll('.auth button, .auth input').forEach((x) => { x.disabled = on; });
+  const run = async (fn) => {
+    if (ocupado) return; err.textContent = ''; ocupado = true; bloquear(true);
+    try { await fn(); } catch (e) { err.textContent = e.message; } finally { ocupado = false; bloquear(false); }
   };
-  const validar = () => {
-    if (!/^\S+@\S+\.\S+$/.test(correo.value.trim())) throw new Error('Escribe un correo válido.');
-    if (clave.value.length < 8) throw new Error('La contraseña necesita al menos 8 caracteres.');
+  const mail = () => { if (!/^\S+@\S+\.\S+$/.test(f.correo.trim())) throw new Error('Escribe un correo válido.'); return f.correo.trim(); };
+  const campo = (id, ph, tipo, clave, ac) => {
+    const i = h('input', { id, type: tipo === 'clave' ? 'password' : 'text', inputmode: tipo === 'correo' ? 'email' : null, autocomplete: ac, placeholder: ph, value: f[clave] || '', oninput: (e) => { f[clave] = e.target.value; }, onkeydown: (e) => { if (e.key === 'Enter') enviar(); } });
+    if (tipo !== 'clave') return i;
+    const ver = h('button', { type: 'button', class: 'ver', 'aria-label': 'Mostrar u ocultar la contraseña', onclick: () => { const on = i.type === 'password'; i.type = on ? 'text' : 'password'; ver.textContent = on ? 'Ocultar' : 'Mostrar'; } }, 'Mostrar');
+    return h('div', { class: 'pass' }, i, ver);
   };
-  sh = sheet({ title: 'Tu cuenta', body: [
-    Nube.puedeGoogle() ? [h('button', { class: 'btn sec wide', onclick: () => accion(async () => { msg.textContent = 'Se ha abierto tu navegador. Elige tu cuenta de Google y vuelve aquí.'; await Nube.entrarConGoogle(); await terminar(); }) }, 'Continuar con Google'), h('div', { class: 'mute small', style: 'text-align:center' }, 'o con tu correo')] : null,
-    field('Correo', correo), field('Contraseña', clave), msg,
-    h('button', { class: 'btn wide', onclick: () => accion(async () => { validar(); await Nube.entrar(correo.value.trim(), clave.value); await terminar(); }) }, 'Entrar'),
-    h('button', { class: 'btn sec wide', onclick: () => accion(async () => {
-      validar(); const r = await Nube.registrar(correo.value.trim(), clave.value);
-      if (r.confirmar) msg.textContent = 'Te hemos enviado un correo para confirmar tu cuenta. Ábrelo y después vuelve aquí a entrar.'; else await terminar();
-    }) }, 'Crear cuenta'),
-    h('button', { class: 'btn plain wide', onclick: () => accion(async () => {
-      if (!/^\S+@\S+\.\S+$/.test(correo.value.trim())) throw new Error('Escribe tu correo arriba y vuelve a pulsar.');
-      await Nube.recuperar(correo.value.trim()); msg.textContent = 'Si ese correo tiene cuenta, recibirás un mensaje para cambiar la contraseña.';
-    }) }, '¿Olvidaste tu contraseña?')] });
-  return sh;
+  const google = () => run(async () => { S.authMsg = 'Se ha abierto tu navegador. Elige tu cuenta de Google y vuelve aquí.'; info.textContent = S.authMsg; await Nube.entrarConGoogle(); S.authMsg = ''; await trasEntrar(); });
+  const info = h('div', { class: 'mute small', style: 'text-align:center', role: 'status' }, S.authMsg || '');
+  const separador = h('div', { class: 'or' }, h('span', {}, 'o'));
+  let enviar, cuerpo, pie, titulo, sub, atras = () => cerrarAuth();
+
+  if (p === 'entrar') {
+    titulo = 'Entrar'; sub = 'Con tu cuenta, tu plan te acompaña en todos tus ordenadores.';
+    enviar = () => run(async () => { const c = mail(); if (!f.clave) throw new Error('Escribe tu contraseña.'); await Nube.entrar(c, f.clave); f.clave = ''; await trasEntrar(); });
+    cuerpo = [campo('auth-correo', 'Correo electrónico', 'correo', 'correo', 'email'), campo('auth-clave', 'Contraseña', 'clave', 'clave', 'current-password'),
+      h('button', { class: 'link', id: 'auth-olvido', type: 'button', onclick: () => { S.auth = 'recuperar'; S.authMsg = ''; render(); } }, '¿Has olvidado tu contraseña?'),
+      h('button', { class: 'btn big', id: 'auth-enviar', onclick: enviar }, 'Entrar'), Nube.puedeGoogle() ? [separador, botonGoogle(google)] : null];
+    pie = ['¿No tienes cuenta? ', h('button', { class: 'link', id: 'auth-alt', onclick: () => { S.auth = 'crear'; S.authMsg = ''; render(); } }, 'Crear cuenta')];
+  } else if (p === 'crear') {
+    titulo = 'Crear cuenta'; sub = 'Guarda tu plan en la nube y úsalo en más de un ordenador.';
+    atras = () => { S.auth = 'entrar'; S.authMsg = ''; render(); };
+    enviar = () => run(async () => {
+      const c = mail(); if (f.clave.length < 8) throw new Error('La contraseña necesita al menos 8 caracteres.'); if (f.clave !== f.clave2) throw new Error('Las contraseñas no coinciden.');
+      const r = await Nube.registrar(c, f.clave); f.clave = ''; f.clave2 = '';
+      if (r.confirmar) { S.auth = 'confirmar'; S.authMsg = ''; render(); } else await trasEntrar();
+    });
+    cuerpo = [campo('auth-correo', 'Correo electrónico', 'correo', 'correo', 'email'), campo('auth-clave', 'Contraseña (mínimo 8 caracteres)', 'clave', 'clave', 'new-password'), campo('auth-clave2', 'Repite la contraseña', 'clave', 'clave2', 'new-password'),
+      h('button', { class: 'btn big', id: 'auth-enviar', onclick: enviar }, 'Crear cuenta'),
+      h('p', { class: 'gate-note', style: 'margin:0' }, 'Al crear la cuenta aceptas la ', h('a', { href: 'https://charlymanso.github.io/rutina/privacidad.html', target: '_blank', rel: 'noopener' }, 'política de privacidad'), '.'),
+      Nube.puedeGoogle() ? [separador, botonGoogle(google)] : null];
+    pie = ['¿Ya tienes cuenta? ', h('button', { class: 'link', id: 'auth-alt', onclick: () => { S.auth = 'entrar'; S.authMsg = ''; render(); } }, 'Entrar')];
+  } else if (p === 'recuperar') {
+    titulo = 'Recuperar contraseña'; sub = 'Te enviaremos un enlace para elegir una nueva.';
+    atras = () => { S.auth = 'entrar'; S.authMsg = ''; render(); };
+    enviar = () => run(async () => { const c = mail(); await Nube.recuperar(c); S.authMsg = 'Si ese correo tiene cuenta, recibirás un mensaje con el enlace. Revisa también la carpeta de spam.'; render(); });
+    cuerpo = [campo('auth-correo', 'Correo electrónico', 'correo', 'correo', 'email'), h('button', { class: 'btn big', id: 'auth-enviar', onclick: enviar }, 'Enviar enlace')];
+  } else { // confirmar
+    titulo = 'Revisa tu correo'; sub = `Hemos enviado un mensaje a ${f.correo.trim()}. Pulsa el enlace para confirmar tu cuenta y después vuelve aquí.`;
+    atras = () => { S.auth = 'crear'; S.authMsg = ''; render(); };
+    enviar = () => { S.auth = 'entrar'; S.authMsg = ''; render(); };
+    cuerpo = [h('button', { class: 'btn big', id: 'auth-enviar', onclick: enviar }, 'Ya lo he confirmado, entrar'),
+      h('button', { class: 'btn plain big', id: 'auth-reenviar', onclick: () => run(async () => { await Nube.reenviar(f.correo.trim()); info.textContent = 'Te lo hemos vuelto a enviar.'; }) }, 'Reenviar el correo')];
+  }
+  return h('div', { class: 'gate auth' }, h('button', { class: 'back', id: 'auth-atras', onclick: atras }, '‹ Atrás'),
+    h('div', { class: 'gate-card' }, h('div', { class: 'gate-logo' }, logo(64)), h('h1', { class: 'auth-title' }, titulo), h('p', { class: 'gate-sub', style: 'margin:2px 0 18px;white-space:normal' }, sub),
+      h('div', { class: 'gate-actions' }, cuerpo, info, err), pie ? h('p', { class: 'auth-pie' }, pie) : null));
 }
 
 function conflictoSheet({ remoto }) {
@@ -522,6 +564,7 @@ function chipUsuario() {
 }
 function render() {
   document.body.classList.toggle('mac', store.platform() === 'darwin');
+  if (S.auth) { root.replaceChildren(viewAuth()); return; }
   if (mostrarInicio()) { root.replaceChildren(viewInicio()); return; }
   const prev = document.querySelector('.main'), top = prev ? prev.scrollTop : 0, view = TABS.find((t) => t[0] === S.tab)[2];
   const animar = S.animar; S.animar = false;
@@ -533,7 +576,7 @@ function render() {
   document.querySelector('.main').scrollTop = top;
 }
 document.addEventListener('keydown', (e) => {
-  if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || sheets.length || mostrarInicio()) return;
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || sheets.length || S.auth || mostrarInicio()) return;
   const t = TABS[+e.key - 1]; if (t) { e.preventDefault(); go(t[0]); }
 });
 

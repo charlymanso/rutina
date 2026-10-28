@@ -68,7 +68,7 @@ h2.sec{font-size:22px;font-weight:700;letter-spacing:-.02em}
 .seg button{padding:5px 14px;border-radius:7px;font-weight:500;font-size:14px;color:var(--ink)}
 .seg button[aria-pressed=true]{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.16)}
 @media(prefers-color-scheme:dark){.seg button[aria-pressed=true]{background:#636366}}
-input[type=text],input[type=number],input[type=time],select,textarea{width:100%;background:var(--fill);border:0;border-radius:10px;padding:9px 12px;min-height:38px;appearance:none;-webkit-appearance:none}
+input[type=text],input[type=number],input[type=time],input[type=password],select,textarea{width:100%;background:var(--fill);border:0;border-radius:10px;padding:9px 12px;min-height:38px;appearance:none;-webkit-appearance:none}
 select{background-image:linear-gradient(45deg,transparent 50%,var(--faint) 50%),linear-gradient(135deg,var(--faint) 50%,transparent 50%);background-position:calc(100% - 17px) 50%,calc(100% - 12px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:30px}
 input::placeholder{color:var(--faint)}
 .field{display:flex;flex-direction:column;gap:6px}
@@ -199,3 +199,29 @@ a.row.tap{color:inherit;text-decoration:none}
 .btn{transition:filter .15s,transform .05s}.btn:active{transform:scale(.98)}
 @media(max-width:760px){.chip{display:none}}
 .page .banner{margin:0;width:100%}
+
+/* ---------- botón de Google (estilo oficial) ---------- */
+.gbtn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;height:44px;padding:0 16px;border-radius:999px;border:1px solid #747775;background:#fff;color:#1f1f1f;font:500 14px/20px Roboto,var(--font);letter-spacing:.25px;transition:background .15s,box-shadow .15s}
+.gbtn:hover{background:#f0f1f1;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px 1px rgba(60,64,67,.15)}
+.gbtn:active{background:#e6e7e7}
+.gbtn:disabled{opacity:.5;cursor:default}
+@media(prefers-color-scheme:dark){.gbtn{background:#131314;border-color:#8e918f;color:#e3e3e3}.gbtn:hover{background:#25262a}.gbtn:active{background:#2f3034}}
+/* ---------- pantallas de cuenta ---------- */
+.auth{position:relative}
+.auth .back{position:absolute;top:20px;left:20px;color:var(--accent);font-weight:500;padding:8px 10px;border-radius:8px}
+.mac .auth .back{top:44px}
+.auth .back:hover{background:var(--fill)}
+.auth-title{font-size:30px;font-weight:700;letter-spacing:-.03em;margin-top:6px}
+.auth .gate-actions{gap:12px;text-align:left}
+.auth .gate-card{width:min(400px,100%)}
+.pass{position:relative}
+.pass input{padding-right:84px}
+.pass .ver{position:absolute;right:6px;top:50%;transform:translateY(-50%);color:var(--accent);font-size:13px;font-weight:500;padding:6px 10px;border-radius:8px}
+.link{color:var(--accent);font-weight:500;padding:4px 0;text-align:left;align-self:flex-start}
+.link:hover{text-decoration:underline}
+.or{display:flex;align-items:center;gap:12px;color:var(--faint);font-size:13px;margin:4px 0}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.auth-pie{margin-top:20px;color:var(--muted);font-size:15px}
+.auth-pie .link{display:inline;padding:0}
+.auth input[type=text],.auth input[type=password]{min-height:46px;font-size:16px}
+.auth .gate-note{text-align:center;align-self:center}

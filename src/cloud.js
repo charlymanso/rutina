@@ -67,6 +67,7 @@ export async function registrar(email, password) {
 export async function entrar(email, password) {
   await guardarSesion(aSesion(await api('/auth/v1/token?grant_type=password', { method: 'POST', body: { email, password } })));
 }
+export const reenviar = (email) => api('/auth/v1/resend', { method: 'POST', body: { type: 'signup', email } });
 export const recuperar = (email) => api('/auth/v1/recover', { method: 'POST', body: { email } });
 export async function salir() {
   const t = sesion && sesion.access_token; await guardarSesion(null);
