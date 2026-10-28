@@ -50,7 +50,7 @@ const num = (v, def = 0) => { const n = parseFloat(String(v).replace(',', '.'));
 
 /* ---------- estado ---------- */
 let data = emptyData();
-const S = { tab: 'hoy', semSel: 0, compSel: 2, gymOpen: null, update: null, updateOculto: false, upd: null, autoUpdate: false, saltarInicio: false, animar: false, version: '', aj: null, ajBuscar: '', auth: null, authMsg: '', authForm: { correo: '', clave: '', clave2: '' } };
+const S = { tab: 'hoy', semSel: 0, compSel: 2, update: null, updateOculto: false, upd: null, autoUpdate: false, saltarInicio: false, animar: false, version: '', aj: null, ajBuscar: '', auth: null, authMsg: '', authForm: { correo: '', clave: '', clave2: '' } };
 const root = document.getElementById('root');
 let saveTimer;
 function commit() {
@@ -67,12 +67,12 @@ function toast(msg) {
 
 /* ---------- hojas modales ---------- */
 const sheets = [];
-function sheet({ title, body, save = 'Guardar', onSave, extra, cancel = 'Cancelar', dismissible = true }) {
+function sheet({ title, body, save = 'Guardar', onSave, extra, cancel = 'Cancelar', dismissible = true, clase = '' }) {
   const err = h('div', { class: 'err', role: 'alert' });
   const api = { close() { veil.remove(); const i = sheets.indexOf(api); if (i >= 0) sheets.splice(i, 1); } };
   const doSave = () => { const r = onSave && onSave(); if (typeof r === 'string') { err.textContent = r; return; } if (r !== false) api.close(); };
   const veil = h('div', { class: 'veil', onmousedown: (e) => { if (e.target === veil && dismissible) api.close(); } },
-    h('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
+    h('div', { class: 'sheet' + (clase ? ' ' + clase : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
       h('header', {}, dismissible ? h('button', { class: 'btn plain', onclick: api.close }, cancel) : h('span'), h('h3', {}, title), onSave ? h('button', { class: 'btn', onclick: doSave }, save) : h('span')),
       h('div', { class: 'body' }, body, err),
       extra ? h('footer', {}, extra) : null));
@@ -380,20 +380,22 @@ function editSesion(id) {
 }
 
 /* Cambiar el entreno de un día concreto sin tocar tu plan semanal */
-function cambiarEntrenoDia(f) {
-  const d = L.parseISO(f), actual = L.sesionDelDia(data, d), plan = L.sesionGym(data, L.idxDia(d)), cambiado = L.hayCambioDeEntreno(data, d);
-  const poner = (valor) => { const dr = diaReg(f); if ((valor === 'descanso' && !plan) || (valor && plan && valor === plan.id)) delete dr.entreno; else dr.entreno = valor; sh.close(); commit(); toast(valor === 'descanso' ? 'Hoy toca descanso.' : 'Entreno cambiado.'); };
+function cambiarEntrenoDia(f, modo = 'cambiar') {
+  const d = L.parseISO(f), actual = L.sesionDelDia(data, d), plan = L.sesionGym(data, L.idxDia(d)), cambiado = L.hayCambioDeEntreno(data, d), anadir = modo === 'anadir';
+  const poner = (valor) => { const dr = diaReg(f); if ((valor === 'descanso' && !plan) || (valor && plan && valor === plan.id)) delete dr.entreno; else dr.entreno = valor; sh.close(); commit(); if (S.entrenoGrande) S.entrenoGrande(); toast(valor === 'descanso' ? 'Hoy toca descanso.' : anadir ? 'Entreno añadido.' : 'Entreno cambiado.'); };
   const fila = (id, titulo, sub, activa) => h('button', { class: 'row tap', type: 'button', id: 'cambiar-' + id, 'aria-pressed': String(activa), onclick: () => poner(id) }, h('div', { class: 'grow' }, titulo, sub ? h('div', { class: 'sub' }, sub) : null), h('span', { class: 'chev', style: 'color:var(--accent);font-weight:700' }, activa ? '✓' : ''));
-  const sh = sheet({ title: 'Entreno de hoy', body: [
-    h('p', { class: 'mute small' }, `Elige qué haces hoy. Solo cambia este día${plan ? `; tu plan sigue siendo “${plan.t}” los ${L.DIAS[L.idxDia(d)].toLowerCase()}s` : ''}. Tu objetivo de calorías de hoy se ajusta.`),
-    h('div', { class: 'group' }, [...data.entreno.sesiones.map((x) => fila(x.id, x.t, `${L.diasTexto(x.dias, true)}${x.min ? ' · ' + x.min : ''}`, actual && actual.id === x.id)), fila('descanso', 'Descanso', 'Sin entreno hoy', !actual)]),
-    cambiado ? h('button', { class: 'btn plain', id: 'cambiar-volver', style: 'align-self:flex-start;padding-left:0', onclick: () => { delete diaReg(f).entreno; sh.close(); commit(); toast('Vuelves a tu plan.'); } }, 'Volver a mi plan') : null] });
+  const sh = sheet({ title: anadir ? 'Añadir entreno' : 'Entreno de hoy', body: [
+    h('p', { class: 'mute small' }, anadir ? 'Elige la sesión que vas a hacer hoy. Solo cambia este día; tu plan semanal no se toca. Tu objetivo de calorías de hoy se ajusta.'
+      : `Elige qué haces hoy. Solo cambia este día${plan ? `; tu plan sigue siendo “${plan.t}” los ${L.DIAS[L.idxDia(d)].toLowerCase()}s` : ''}. Tu objetivo de calorías de hoy se ajusta.`),
+    h('div', { class: 'group' }, [...data.entreno.sesiones.map((x) => fila(x.id, x.t, `${L.diasTexto(x.dias, true)}${x.min ? ' · ' + x.min : ''}`, actual && actual.id === x.id)), anadir ? null : fila('descanso', 'Descanso', 'Sin entreno hoy', !actual),
+      anadir ? h('button', { class: 'row tap', type: 'button', id: 'cambiar-nueva', onclick: () => { sh.close(); editSesion(null); } }, h('div', { class: 'grow', style: 'color:var(--accent);font-weight:500' }, 'Crear una sesión nueva…')) : null]),
+    cambiado ? h('button', { class: 'btn plain', id: 'cambiar-volver', style: 'align-self:flex-start;padding-left:0', onclick: () => { delete diaReg(f).entreno; sh.close(); commit(); if (S.entrenoGrande) S.entrenoGrande(); toast('Vuelves a tu plan.'); } }, 'Volver a mi plan') : null] });
 }
+function anadirEntrenoHoy(f) { if (!data.entreno.sesiones.length) return editSesion(null); cambiarEntrenoDia(f, 'anadir'); }
 function barraEntreno(d, f) {
-  if (!data.entreno.sesiones.length) return null;
   const ses = L.sesionDelDia(data, d), cambiado = L.hayCambioDeEntreno(data, d);
   return h('div', { class: 'row', style: 'padding:0 4px;min-height:0' }, h('div', { class: 'grow small mute', id: 'entreno-hoy' }, ses ? `Entreno de hoy: ${ses.t}` : 'Hoy toca descanso', cambiado ? ' · cambiado' : ''),
-    h('button', { class: 'btn plain', id: 'cambiar-entreno', onclick: () => cambiarEntrenoDia(f) }, ses ? 'Cambiar entreno' : 'Entrenar hoy'));
+    h('button', { class: 'btn plain', id: 'cambiar-entreno', onclick: () => (ses ? cambiarEntrenoDia(f) : anadirEntrenoHoy(f)) }, ses ? 'Cambiar entreno' : 'Añadir entreno'));
 }
 
 function addAgenda(f) {
@@ -466,30 +468,55 @@ function macroBar(t) {
 
 /* ---------- vistas ---------- */
 function slotEl(s, f, ahora, hecho) {
+  const contenido = [h('span', { class: 'kind' }, s.kind), h('h3', {}, s.title), s.det ? h('p', { class: 'det' }, s.det) : null,
+    s.progreso != null ? h('div', { class: 'bar', style: 'margin-top:8px' }, h('i', { style: `width:${Math.round(s.progreso * 100)}%` })) : null];
   return h('div', { class: 'slot' + (hecho ? ' hecho' : '') + (s.k === ahora ? ' ahora' : '') },
     h('span', { class: 'hora' }, s.hora),
-    h('div', {}, h('span', { class: 'kind' }, s.kind), h('h3', {}, s.title), s.det ? h('p', { class: 'det' }, s.det) : null, s.extra || null),
+    s.accion ? h('button', { class: 'slot-main', id: 'slot-' + s.k, type: 'button', onclick: s.accion, 'aria-label': `${s.kind}: ${s.title}. Abrir` }, ...contenido, h('span', { class: 'slot-ver' }, s.verTexto || 'Abrir ›'))
+      : h('div', {}, ...contenido, s.extra || null),
     h('button', { class: 'chk', 'aria-pressed': String(hecho), 'aria-label': (hecho ? 'Desmarcar: ' : 'Marcar como hecho: ') + s.kind, onclick: () => toggleHecho(f, s.k) }, icon('check')));
 }
-
-function bloqueGym(ses, f) {
-  const reg = L.regGym(data, f), abierto = S.gymOpen === f, hechos = ses.ej.filter((e) => reg[L.slug(e.n)] && reg[L.slug(e.n)].hecho).length;
-  const lista = h('div', { class: 'ejs' }, ses.ej.map((e) => {
+/* Vista grande del entreno de hoy: se abre al tocar la tarjeta. Recuerda el último peso de cada ejercicio. */
+function abrirEntrenoHoy(f) {
+  const d = L.parseISO(f), cuerpo = h('div', { class: 'stack', style: 'gap:18px' });
+  const guardar = (k, patch) => { setEj(f, k, patch); pintar(); };
+  const fichas = (ses, reg) => ses.ej.map((e) => {
     const k = L.slug(e.n), x = reg[k] || {}, u = e.c ? L.ultimoPeso(data, k, f) : null;
-    const dolor = h('select', { 'aria-label': 'Dolor de 0 a 10', class: L.semaforo(x.dolor), value: x.dolor == null ? '' : String(x.dolor), onchange: (ev) => {
-      const v = ev.target.value === '' ? null : +ev.target.value; if (v != null && v >= 5) toast('Dolor de 5 o más: para ese ejercicio y cámbialo.'); setEj(f, k, { dolor: v }); } },
+    const kgActual = x.kg != null ? x.kg : (u ? u.kg : null), sugerido = x.kg == null && !!u;     // si hoy no has puesto nada, se recuerda el de la última vez
+    const mover = (delta) => guardar(k, { kg: Math.max(0, Math.round(((kgActual ?? 0) + delta) * 100) / 100) });
+    const kg = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off', id: 'kg-' + k, class: 'kg' + (sugerido ? ' sugerido' : ''), 'aria-label': 'Kilos de ' + e.n, placeholder: '—', value: kgActual != null ? L.kgTxt(kgActual) : '', onchange: (ev) => {
+      const v = ev.target.value.trim(); if (v === '') return guardar(k, { kg: null });
+      const n = num(v, NaN); if (!Number.isFinite(n) || n < 0 || n > 999) return toast('Escribe los kilos como número, por ejemplo 82,5.'); guardar(k, { kg: Math.round(n * 100) / 100 }); } });
+    const dolor = h('select', { id: 'dolor-' + k, 'aria-label': 'Dolor de 0 a 10', class: L.semaforo(x.dolor), value: x.dolor == null ? '' : String(x.dolor), onchange: (ev) => {
+      const v = ev.target.value === '' ? null : +ev.target.value; if (v != null && v >= 5) toast('Dolor de 5 o más: para ese ejercicio y cámbialo.'); guardar(k, { dolor: v }); } },
       h('option', { value: '' }, '–'), Array.from({ length: 11 }, (_, n) => h('option', { value: String(n) }, String(n))));
-    return h('div', { class: 'e' + (x.hecho ? ' hecho' : '') },
-      h('button', { class: 'box', 'aria-pressed': String(!!x.hecho), 'aria-label': (x.hecho ? 'Desmarcar ' : 'Marcar ') + e.n, onclick: () => setEj(f, k, { hecho: !x.hecho }) }, icon('check')),
-      h('div', { class: 'nm' }, h('span', {}, e.n), h('span', { class: 'sch' }, e.s)),
-      h('div', { class: 'det2' },
-        e.c ? h('label', {}, 'kg', h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off', value: x.kg != null ? L.kgTxt(x.kg) : '', placeholder: u ? L.kgTxt(u.kg) : '', onchange: (ev) => {
-          const v = ev.target.value.trim(); if (v === '') return setEj(f, k, { kg: null });
-          const n = num(v, NaN); if (!Number.isFinite(n) || n < 0 || n > 999) return toast('Escribe los kilos como número, por ejemplo 82,5.'); setEj(f, k, { kg: Math.round(n * 100) / 100 }); } })) : null,
-        h('label', {}, 'dolor', dolor), u ? h('span', {}, `última vez ${L.kgTxt(u.kg)} kg`) : null));
-  }));
-  return [h('button', { class: 'open-btn', 'aria-expanded': String(abierto), onclick: () => { S.gymOpen = abierto ? null : f; render(); } },
-    `${abierto ? 'Cerrar sesión' : 'Abrir sesión'} · ${hechos} de ${ses.ej.length} hechos`), abierto ? lista : null];
+    return h('div', { class: 'ficha' + (x.hecho ? ' hecho' : ''), id: 'ficha-' + k },
+      h('div', { class: 'ficha-top' },
+        h('button', { class: 'chk', id: 'hecho-' + k, 'aria-pressed': String(!!x.hecho), 'aria-label': (x.hecho ? 'Desmarcar ' : 'Marcar como hecho: ') + e.n,
+          onclick: () => guardar(k, { hecho: !x.hecho, ...(!x.hecho && x.kg == null && u ? { kg: u.kg } : {}) }) }, icon('check')),   // al marcarlo se guarda el peso recordado
+        h('div', { class: 'grow' }, h('div', { class: 'ficha-nombre' }, e.n), h('div', { class: 'mute num' }, e.s))),
+      h('div', { class: 'ficha-campos' },
+        e.c ? h('div', { class: 'campo' }, h('span', { class: 'label' }, 'Peso'), h('div', { class: 'kgbox' }, h('button', { type: 'button', class: 'mas', 'aria-label': 'Quitar 2,5 kg', onclick: () => mover(-2.5) }, '−'), kg, h('span', { class: 'kgu' }, 'kg'), h('button', { type: 'button', class: 'mas', 'aria-label': 'Sumar 2,5 kg', onclick: () => mover(2.5) }, '+'))) : null,
+        h('div', { class: 'campo' }, h('span', { class: 'label' }, 'Dolor'), dolor)),
+      u ? h('div', { class: 'mute small' }, `${sugerido ? 'Peso de la última vez' : 'Última vez'}: ${L.kgTxt(u.kg)} kg · ${L.fechaCorta(L.parseISO(u.f))}`) : null);
+  });
+  function pintar() {
+    if (!document.body.contains(cuerpo)) return;
+    const ses = L.sesionDelDia(data, d); if (!ses) { sh.close(); return; }
+    const reg = L.regGym(data, f), total = ses.ej.length, hechos = ses.ej.filter((e) => reg[L.slug(e.n)] && reg[L.slug(e.n)].hecho).length, terminado = !!L.hechosDe(data, f).gym;
+    const cont = cuerpo.parentElement, top = cont ? cont.scrollTop : 0;
+    cuerpo.replaceChildren(
+      h('div', {}, h('div', { class: 'label' }, `Entreno${ses.min ? ' · ' + ses.min : ''}`), h('h2', { class: 'grande-titulo', id: 'entreno-titulo' }, ses.t),
+        h('div', { class: 'row', style: 'padding:8px 0 0;gap:10px;min-height:0' }, h('div', { class: 'bar grow' }, h('i', { style: `width:${total ? Math.round(hechos / total * 100) : 0}%` })), h('span', { class: 'num mute', id: 'entreno-progreso' }, `${hechos} de ${total}`))),
+      ...fichas(ses, reg),
+      h('div', { class: 'stack', style: 'gap:8px' },
+        terminado ? h('button', { class: 'btn sec wide', id: 'entreno-reabrir', onclick: () => { toggleHecho(f, 'gym'); pintar(); } }, 'Entreno completado ✓ · Marcar como pendiente')
+          : h('button', { class: 'btn wide', id: 'entreno-terminar', onclick: () => { toggleHecho(f, 'gym'); toast('¡Entreno completado!'); sh.close(); } }, 'Terminar entreno'),
+        h('button', { class: 'btn plain wide', id: 'entreno-cambiar', onclick: () => cambiarEntrenoDia(f) }, 'Cambiar entreno de hoy')));
+    if (cont) cont.scrollTop = top;
+  }
+  const sh = sheet({ title: 'Entreno de hoy', clase: 'grande', save: 'Listo', body: cuerpo, onSave: () => {} });
+  S.entrenoGrande = pintar; pintar();
 }
 
 function resumenCard(f) {
@@ -533,7 +560,8 @@ function viewHoy() {
     const pl = dm && dm[m]; if (pl) slots.push({ k: m, hora: data.menu.horas[m], kind: nombre, title: pl.libre ? 'Comida libre' : pl.t, det: pl.libre ? 'Que lleve una ración clara de proteína.' : itemsText(pl.items) });
   }
   const ses = L.sesionDelDia(data, d);
-  if (ses) slots.push({ k: 'gym', hora: data.entreno.hora, kind: `Entreno${ses.min ? ' · ' + ses.min : ''}`, title: ses.t, extra: bloqueGym(ses, f) });
+  if (ses) { const reg = L.regGym(data, f), hechasEj = ses.ej.filter((e) => reg[L.slug(e.n)] && reg[L.slug(e.n)].hecho).length;
+    slots.push({ k: 'gym', hora: data.entreno.hora, kind: `Entreno${ses.min ? ' · ' + ses.min : ''}`, title: ses.t, det: `${hechasEj} de ${ses.ej.length} ejercicios`, progreso: ses.ej.length ? hechasEj / ses.ej.length : 0, accion: () => abrirEntrenoHoy(f), verTexto: 'Ver y registrar ›' }); }
   slots.sort((a, b) => L.minutos(a.hora) - L.minutos(b.hora));
   const now = new Date(), nm = now.getHours() * 60 + now.getMinutes(), sig = slots.find((s) => !hechos[s.k] && L.minutos(s.hora) >= nm - 60), hechas = slots.filter((s) => hechos[s.k]).length;
 
@@ -831,7 +859,7 @@ function conflictoSheet({ remoto }) {
 }
 
 /* ---------- estructura ---------- */
-const TABS = [['hoy', 'Hoy', viewHoy], ['semana', 'Menú', viewSemana], ['compra', 'Compra', viewCompra], ['entreno', 'Entreno', viewEntreno], ['ajustes', 'Ajustes', viewAjustes]];
+const TABS = [['compra', 'Compra', viewCompra], ['semana', 'Menú', viewSemana], ['hoy', 'Hoy', viewHoy], ['entreno', 'Entreno', viewEntreno], ['ajustes', 'Ajustes', viewAjustes]];
 function go(tab) { if (tab === 'ajustes') S.aj = null; S.tab = tab; S.animar = true; render(); const m = document.querySelector('.main'); if (m) m.scrollTop = 0; }
 function chipUsuario() {
   const u = Nube.usuario(), nombre = data.perfil.nombre || (u ? u.email.split('@')[0] : 'Invitado');
@@ -847,7 +875,7 @@ function render() {
   const animar = S.animar; S.animar = false;
   root.replaceChildren(h('div', { class: 'app' },
     h('nav', { class: 'side', 'aria-label': 'Secciones' }, h('div', { class: 'brand' }, 'Rutina'),
-      TABS.map(([id, nombre]) => [id === 'ajustes' ? h('div', { class: 'spacer' }) : null, h('button', { class: 'nav', 'aria-current': S.tab === id ? 'page' : null, onclick: () => go(id) }, icon(id), nombre)]),
+      TABS.map(([id, nombre]) => [id === 'ajustes' ? h('div', { class: 'spacer' }) : null, h('button', { class: 'nav' + (id === 'hoy' ? ' principal' : ''), 'aria-current': S.tab === id ? 'page' : null, onclick: () => go(id) }, h('span', { class: 'ico' }, icon(id)), h('span', { class: 'nl' }, nombre))]),
       Nube.nubeActiva() ? chipUsuario() : null),
     h('main', { class: 'main' + (animar ? ' enter' : '') }, bannerUpdate(), view())));
   document.querySelector('.main').scrollTop = top;
