@@ -242,3 +242,9 @@ a.row.tap{color:inherit;text-decoration:none}
 .dtot .bar{height:5px;margin-top:5px}.bar.warn i{background:var(--orange)}
 .plato .kc{color:var(--ink);font-weight:600}
 .dtot .mute{display:block;font-weight:500;font-size:12px}
+
+/* ---------- recomendar menú y calculadora ---------- */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chipopt{padding:7px 14px;border-radius:99px;background:var(--fill);font-size:14px;font-weight:500;transition:background .15s}
+.chipopt[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
+#rec-lista .row{padding:10px 14px}

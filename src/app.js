@@ -4,6 +4,8 @@ import { cargarClima } from './weather.js';
 import { store } from './store.js';
 import { BASE, buscarLocal, normalizar } from './alimentos.js';
 import { buscarOnline, porCodigo, esCodigoDeBarras } from './off.js';
+import { calcularObjetivo, ACTIVIDADES, METAS, SEXOS } from './objetivo.js';
+import { generarSemana, DIETAS, EXCLUSIONES } from './recetas.js';
 import { buscarActualizacion } from './update.js';
 import * as Nube from './cloud.js';
 import * as Sync from './sync.js';
@@ -161,6 +163,78 @@ function itemsEditor(items, onChange = () => {}) {
   draw(); box.redraw = draw; return box;
 }
 
+
+/* ---------- calculadora de objetivo ---------- */
+function abrirObjetivo({ onApply = null, guardar = true } = {}) {
+  const c0 = data.perfil.cuerpo || {}, entrenos = data.entreno.sesiones.length;
+  const st = { sexo: c0.sexo || 'h', edad: c0.edad || '', peso: c0.peso || '', altura: c0.altura || '', actividad: c0.actividad || 1.55, meta: c0.meta || 'man' };
+  const res = h('div', { class: 'stack', id: 'obj-resultado', style: 'gap:12px' });
+  const num0 = (id, ph, clave) => h('input', { id, type: 'number', inputmode: 'decimal', step: 'any', placeholder: ph, value: st[clave] === '' ? '' : String(st[clave]), oninput: (e) => { st[clave] = e.target.value; pintar(); } });
+  const sexo = h('div', { class: 'seg', role: 'group', 'aria-label': 'Sexo' });
+  const pintarSexo = () => sexo.replaceChildren(...SEXOS.map(([v, t]) => h('button', { type: 'button', 'aria-pressed': String(st.sexo === v), onclick: () => { st.sexo = v; pintarSexo(); pintar(); } }, t)));
+  const actividad = h('select', { id: 'obj-actividad', value: String(st.actividad), onchange: (e) => { st.actividad = +e.target.value; pintar(); } }, ACTIVIDADES.map(([v, t, d]) => h('option', { value: String(v) }, `${t} · ${d}`)));
+  const meta = h('select', { id: 'obj-meta', value: st.meta, onchange: (e) => { st.meta = e.target.value; pintar(); } }, METAS.map(([v, t, d]) => h('option', { value: v }, `${t} · ${d}`)));
+  const fila = (a, b) => h('div', { class: 'row', style: 'min-height:40px;padding:6px 0' }, h('div', { class: 'grow mute' }, a), h('b', { class: 'num' }, b));
+  let ultimo = null;
+  function pintar() {
+    const r = calcularObjetivo({ ...st, entrenos }); ultimo = r;
+    if (r.error) { res.replaceChildren(h('p', { class: 'mute small', id: 'obj-ayuda' }, st.edad === '' || st.peso === '' || st.altura === '' ? 'Rellena tus datos y verás aquí tu objetivo.' : r.error)); return; }
+    const pk = r.prot * 4, ck = r.carb * 4, fk = r.grasa * 9, tot = pk + ck + fk, pc = (x) => Math.round((x / tot) * 100);
+    res.replaceChildren(
+      h('div', { class: 'card', style: 'gap:6px;background:var(--accent-soft);box-shadow:none;text-align:center' }, h('div', { class: 'label' }, 'Tu objetivo diario'), h('div', { id: 'obj-kcal', class: 'num', style: 'font-size:40px;font-weight:700;letter-spacing:-.03em' }, `${L.miles(r.kcal)} kcal`),
+        entrenos > 0 && entrenos < 7 ? h('div', { class: 'mute small num', id: 'obj-dias' }, `${L.miles(r.gym)} kcal los días de entreno · ${L.miles(r.sin)} kcal los de descanso`) : null),
+      h('div', { class: 'row', style: 'gap:8px;padding:0' }, ...[['Proteína', r.prot, `${(r.prot / st.peso).toFixed(1).replace('.', ',')} g/kg`], ['Hidratos', r.carb, `${pc(ck)} %`], ['Grasa', r.grasa, `${pc(fk)} %`]].map(([n, g, x]) => h('div', { class: 'grow metric', style: 'text-align:center' }, h('span', { class: 'label' }, n), h('b', { class: 'num', style: 'font-size:22px' }, `${g} g`), h('span', { class: 'mute small num' }, x)))),
+      h('div', { class: 'stackbar', role: 'img', 'aria-label': `Proteína ${pc(pk)} %, hidratos ${pc(ck)} %, grasa ${pc(fk)} %` }, h('i', { class: 'sp', style: `width:${pc(pk)}%` }), h('i', { class: 'sc', style: `width:${pc(ck)}%` }), h('i', { class: 'sf', style: `width:${pc(fk)}%` })),
+      h('div', { class: 'group', style: 'box-shadow:none;background:var(--bg);padding:2px 14px' }, fila('Metabolismo basal', `${L.miles(r.bmr)} kcal`), fila('Mantenimiento (con tu actividad)', `${L.miles(r.tdee)} kcal`)),
+      ...r.avisos.map((a) => h('p', { class: 'small', style: 'color:var(--orange)', role: 'alert' }, '⚠ ' + a)),
+      h('p', { class: 'mute', style: 'font-size:12px' }, 'Es una estimación orientativa (fórmula de Mifflin-St Jeor), no un consejo médico. Si estás embarazada, das el pecho o tienes alguna enfermedad, consulta con un profesional.'));
+  }
+  pintarSexo();
+  sheet({ title: 'Calcular mi objetivo', save: 'Usar estos objetivos', body: [field('Sexo', sexo), h('div', { class: 'pair' }, field('Edad (años)', num0('obj-edad', '30', 'edad')), field('Altura (cm)', num0('obj-altura', '175', 'altura'))), field('Peso (kg)', num0('obj-peso', '70', 'peso')),
+    field('Actividad', actividad), field('Objetivo', meta), entrenos ? h('p', { class: 'mute small' }, `Tienes ${entrenos} ${entrenos === 1 ? 'sesión' : 'sesiones'} de entreno a la semana: esos días comes algo más y los de descanso algo menos, y la media semanal es tu objetivo.`) : null, res],
+    onSave: () => {
+      const r = calcularObjetivo({ ...st, entrenos }); if (r.error) return r.error;
+      if (guardar) { data.perfil.cuerpo = { ...st }; data.perfil.objetivos = { gym: { kcal: r.gym, prot: r.prot }, sin: { kcal: r.sin, prot: r.prot } }; commit(); toast('Objetivos actualizados.'); }
+      if (onApply) onApply(r, { ...st });
+    } });
+  pintar();
+}
+
+/* ---------- recomendar menú ---------- */
+function idDeBase(nombre) { // reutiliza tu ingrediente si ya lo tienes; si no, lo crea desde la base
+  const n = normalizar(nombre), ya = Object.entries(data.ingredientes).find(([, g]) => normalizar(g.n) === n); if (ya) return ya[0];
+  const a = BASE.find((x) => normalizar(x.n) === n), { origen, ...ing } = a; let id = L.slug(a.n), c = 2; const b = id; while (data.ingredientes[id]) id = `${b}-${c++}`; data.ingredientes[id] = ing; return id;
+}
+function recomendarMenu(lun, semana) {
+  const opc = { dieta: 'omnivora', excluir: new Set(), semilla: Math.floor(Math.random() * 1e6) };
+  const lista = h('div', { class: 'group', id: 'rec-lista' }), nota = h('p', { class: 'mute small', id: 'rec-nota' });
+  const fijos = () => ['desayuno', 'media', 'merienda'].reduce((a, c) => { const f = L.fijoOn(data, c); if (!f) return a; const t = L.sumaItems(data, f.items); return { k: a.k + t.k, p: a.p + t.p }; }, { k: 0, p: 0 });
+  let prop = null;
+  function pintar() {
+    const fj = fijos(), dias = Array.from({ length: 7 }, (_, i) => { const o = L.objetivo(data, L.addDays(lun, i)); return { k: Math.max(600, o.kcal - fj.k), p: Math.max(30, o.prot - fj.p) }; });
+    prop = generarSemana({ dias, dieta: opc.dieta, excluir: [...opc.excluir], semilla: opc.semilla });
+    if (!prop) { lista.replaceChildren(h('p', { class: 'mute small', style: 'padding:14px' }, 'Con esas opciones no hay recetas suficientes. Prueba a quitar alguna restricción.')); nota.textContent = ''; return; }
+    lista.replaceChildren(...prop.map((d, i) => { const o = L.objetivo(data, L.addDays(lun, i)), k = d.k + fj.k, desv = Math.abs(k - o.kcal) / o.kcal;
+      return h('div', { class: 'row', style: 'align-items:flex-start;gap:10px' }, h('div', { style: 'width:5.2rem;font-weight:600' }, L.DIAS[i].slice(0, 3)), h('div', { class: 'grow' }, d.comida.t, h('div', { class: 'sub' }, d.cena.t)),
+        h('div', { class: 'num small', style: 'text-align:right;white-space:nowrap' }, h('div', { style: desv > 0.1 ? 'color:var(--orange);font-weight:600' : 'font-weight:600' }, `${L.miles(k)} kcal`), h('div', { class: 'mute' }, `P ${L.miles(d.p + fj.p)} g`))); }));
+    const media = prop.reduce((a, d) => a + d.k + fj.k, 0) / 7, obj = [0, 1, 2, 3, 4, 5, 6].reduce((a, i) => a + L.objetivo(data, L.addDays(lun, i)).kcal, 0) / 7;
+    nota.textContent = `Media de la propuesta: ${L.miles(media)} kcal al día (tu objetivo medio: ${L.miles(obj)}).` + (media < obj * 0.92 ? ' Si te quedas corto, añade una merienda o una media mañana en Ajustes.' : '');
+  }
+  const dieta = h('select', { id: 'rec-dieta', onchange: (e) => { opc.dieta = e.target.value; pintar(); } }, DIETAS.map(([v, t]) => h('option', { value: v }, t)));
+  const chips = h('div', { class: 'chips' }, EXCLUSIONES.map(([v, t]) => { const b = h('button', { type: 'button', class: 'chipopt', id: 'rec-ex-' + v, 'aria-pressed': 'false', onclick: () => { opc.excluir.has(v) ? opc.excluir.delete(v) : opc.excluir.add(v); b.setAttribute('aria-pressed', String(opc.excluir.has(v))); pintar(); } }, t); return b; }));
+  const sh = sheet({ title: 'Recomendar menú', save: 'Usar este menú', body: [
+    h('p', { class: 'mute small' }, 'Propongo una comida y una cena para cada día, con cantidades ajustadas a tus objetivos y a lo que ya comes en el desayuno y la media mañana.'),
+    field('Tipo de alimentación', dieta), h('div', {}, h('div', { class: 'label', style: 'margin-bottom:6px' }, 'Evitar'), chips), lista, nota,
+    h('button', { class: 'btn plain', style: 'align-self:flex-start;padding-left:0', id: 'rec-calc', onclick: () => abrirObjetivo({ onApply: () => pintar() }) }, '¿No sabes cuántas calorías necesitas? Calcúlalas')],
+    extra: h('button', { class: 'btn sec', id: 'rec-otra', onclick: () => { opc.semilla = (opc.semilla + 7919) % 1000003; pintar(); } }, 'Otra propuesta'),
+    onSave: () => {
+      if (!prop) return 'No hay propuesta que aplicar.';
+      prop.forEach((d, i) => { for (const m of ['comida', 'cena']) semana[i][m] = { t: d[m].t, items: d[m].items.map(([n, q]) => [idDeBase(n), q]) }; });
+      commit(); toast('Menú actualizado. Puedes cambiar cualquier plato tocándolo.');
+    } });
+  pintar();
+}
+
 /* ---------- editores ---------- */
 function editIngrediente(id, onDone, relleno = {}) {
   const g = id ? clone(data.ingredientes[id]) : { n: '', u: 'g', k: 0, p: 0, s: 'despensa', pl: '', ...relleno };
@@ -267,14 +341,16 @@ function bienvenida() {
   const T = makeTemplate();
   const nombre = h('input', { type: 'text', placeholder: 'Tu nombre' }), ciudad = h('input', { type: 'text', placeholder: 'Para ver el tiempo (opcional)' });
   const kcal = h('input', { type: 'number', value: String(T.perfil.objetivos.gym.kcal) }), prot = h('input', { type: 'number', value: String(T.perfil.objetivos.gym.prot) });
+  let calcR = null, cuerpoR = null;
   const aplicar = (base) => {
     const k = Math.max(0, num(kcal.value)), p = Math.max(0, num(prot.value));
-    data = base; data.perfil = { ...data.perfil, listo: true, nombre: nombre.value.trim(), ciudad: ciudad.value.trim(), objetivos: { gym: { kcal: k, prot: p }, sin: { kcal: Math.round(k * 0.92), prot: p } } };
+    data = base; data.perfil = { ...data.perfil, listo: true, nombre: nombre.value.trim(), ciudad: ciudad.value.trim(), objetivos: calcR ? { gym: { kcal: calcR.gym, prot: calcR.prot }, sin: { kcal: calcR.sin, prot: calcR.prot } } : { gym: { kcal: k, prot: p }, sin: { kcal: Math.round(k * 0.92), prot: p } }, ...(cuerpoR ? { cuerpo: cuerpoR } : {}) };
     sheets.slice().forEach((s) => s.close()); commit(); refreshClima();
   };
   S.bienvenida = sheet({ title: 'Bienvenido a Rutina', dismissible: false,
     body: [h('div', { class: 'hero' }, h('div', { class: 'big' }, 'Tu día, claro y a tu ritmo'), h('p', { class: 'mute' }, 'Comidas, compra y entrenos en un solo sitio. Todo se guarda en este ordenador.')),
       field('¿Cómo te llamas?', nombre), field('Ciudad', ciudad), h('div', { class: 'pair' }, field('Calorías al día', kcal), field('Proteína al día (g)', prot)),
+      h('button', { class: 'btn plain', id: 'bienv-calc', style: 'align-self:flex-start;padding-left:0', onclick: () => abrirObjetivo({ guardar: false, onApply: (r, cuerpo) => { kcal.value = String(r.gym); prot.value = String(r.prot); calcR = r; cuerpoR = cuerpo; } }) }, 'Calcular mis objetivos por mí'),
       h('p', { class: 'mute small' }, 'Son solo una referencia. Puedes cambiarlos cuando quieras en Ajustes.'),
       h('button', { class: 'btn wide', onclick: () => aplicar(makeTemplate()) }, 'Empezar con un plan de ejemplo'),
       h('button', { class: 'btn sec wide', onclick: () => aplicar(emptyData()) }, 'Empezar en blanco'),
@@ -419,7 +495,7 @@ function viewSemana() {
   const conPlan = dias.filter((x) => x.t && x.t.k > 0), media = conPlan.length ? { k: conPlan.reduce((a, x) => a + x.t.k, 0) / conPlan.length, p: conPlan.reduce((a, x) => a + x.t.p, 0) / conPlan.length } : null;
   return h('div', { class: 'page' },
     h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, 'Menú'), h('p', { class: 'subtitle' }, n > 1 ? `Semana ${w + 1} de ${n} del ciclo` : 'Se repite cada semana')),
-      seg([[0, 'Esta semana'], [1, 'La que viene']], S.semSel, (v) => { S.semSel = v; render(); })),
+      h('div', { class: 'row', style: 'gap:10px;flex-wrap:wrap;padding:0' }, h('button', { class: 'btn sec', id: 'recomendar', onclick: () => recomendarMenu(lun, semana) }, 'Recomendar menú'), seg([[0, 'Esta semana'], [1, 'La que viene']], S.semSel, (v) => { S.semSel = v; render(); }))),
     media ? h('div', { class: 'card', style: 'flex-direction:row;flex-wrap:wrap;gap:12px 32px' },
       h('div', { class: 'metric' }, h('span', { class: 'label' }, 'Media diaria'), h('b', { class: 'num', id: 'media-kcal' }, `${L.miles(media.k)} kcal`)),
       h('div', { class: 'metric' }, h('span', { class: 'label' }, 'Proteína media'), h('b', { class: 'num', id: 'media-prot' }, `${L.miles(media.p)} g`)),
@@ -477,7 +553,7 @@ function viewAjustes() {
     grupo('Perfil', rowOf('Nombre', txt(p.nombre, (v) => { p.nombre = v; commit(); }, 'Tu nombre')),
       rowOf('Ciudad', txt(p.ciudad, (v) => { p.ciudad = v; data.clima = null; commit(); refreshClima(); }, 'Para el tiempo'), 'Se usa solo para consultar el tiempo.'),
       rowOf('Personas en casa', h('div', { class: 'stepper' }, h('button', { 'aria-label': 'Menos', onclick: () => { p.personas = Math.max(1, (p.personas || 1) - 1); commit(); } }, '−'), h('span', { class: 'num' }, String(p.personas || 1)), h('button', { 'aria-label': 'Más', onclick: () => { p.personas = Math.min(12, (p.personas || 1) + 1); commit(); } }, '+')), 'Multiplica las cantidades de la lista de la compra.')),
-    grupo('Objetivos diarios', rowOf('Día con entreno · calorías', numField(o.gym.kcal, (v) => { o.gym.kcal = v; commit(); })), rowOf('Día con entreno · proteína (g)', numField(o.gym.prot, (v) => { o.gym.prot = v; commit(); })),
+    grupo('Objetivos diarios', tapRow('Calcular mis objetivos', 'A partir de tu edad, peso, altura y actividad.', () => abrirObjetivo()), rowOf('Día con entreno · calorías', numField(o.gym.kcal, (v) => { o.gym.kcal = v; commit(); })), rowOf('Día con entreno · proteína (g)', numField(o.gym.prot, (v) => { o.gym.prot = v; commit(); })),
       rowOf('Día sin entreno · calorías', numField(o.sin.kcal, (v) => { o.sin.kcal = v; commit(); })), rowOf('Día sin entreno · proteína (g)', numField(o.sin.prot, (v) => { o.sin.prot = v; commit(); })),
       rowOf('Comida libre · calorías', numField(p.libre.kcal, (v) => { p.libre.kcal = v; commit(); }), 'Lo que cuentas cuando comes fuera del plan.'), rowOf('Comida libre · proteína (g)', numField(p.libre.prot, (v) => { p.libre.prot = v; commit(); }))),
     grupo('Horarios', ...L.FIJOS.map(([c, n]) => { const f = data.menu.fijos[c]; return h('div', { class: 'row' }, h('button', { class: 'grow', style: 'text-align:left', onclick: () => editFijo(c, n) }, n, h('div', { class: 'sub' }, f.on ? `${f.hora} · ${f.texto}` : 'Desactivada')), swt(f.on, () => { f.on = !f.on; commit(); }, n)); }),
