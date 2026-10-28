@@ -38,20 +38,41 @@ export const ing = (data, id) => data.ingredientes[id] || { n: id, u: 'g', k: 0,
 const porUnidad = (g, q) => (g.u === 'ud' ? q : q / 100);
 export const kcalDe = (data, id, q) => ing(data, id).k * porUnidad(ing(data, id), q);
 export const protDe = (data, id, q) => ing(data, id).p * porUnidad(ing(data, id), q);
-export const sumaItems = (data, items) => (items || []).reduce((a, [id, q]) => ({ k: a.k + kcalDe(data, id, q), p: a.p + protDe(data, id, q) }), { k: 0, p: 0 });
+export const carbDe = (data, id, q) => (ing(data, id).c || 0) * porUnidad(ing(data, id), q);
+export const grasaDe = (data, id, q) => (ing(data, id).f || 0) * porUnidad(ing(data, id), q);
+export const tieneMacros = (g) => g.c != null && g.f != null;
+// Suma calorías y macros de una lista [[id, cantidad], ...]. `completo` = false si algún ingrediente no tiene hidratos/grasa.
+export function sumaItems(data, items) {
+  const r = { k: 0, p: 0, c: 0, f: 0, completo: true };
+  for (const [id, q] of items || []) {
+    r.k += kcalDe(data, id, q); r.p += protDe(data, id, q); r.c += carbDe(data, id, q); r.f += grasaDe(data, id, q);
+    if (!tieneMacros(ing(data, id))) r.completo = false;
+  }
+  return r;
+}
+// Extras: lo que has comido fuera del plan ese día (ya con sus valores totales calculados).
+export const extrasDe = (data, f) => (data.dias[f] && data.dias[f].extras) || [];
+export const sumaExtras = (extras) => extras.reduce((a, e) => ({ k: a.k + e.k, p: a.p + e.p, c: a.c + (e.c || 0), f: a.f + (e.f || 0) }), { k: 0, p: 0, c: 0, f: 0 });
+// Reparto de la energía entre proteína, hidratos y grasa, en %
+export function repartoMacros(t) {
+  const p = t.p * 4, c = t.c * 4, f = t.f * 9, tot = p + c + f;
+  return tot > 0 ? { p: Math.round((p / tot) * 100), c: Math.round((c / tot) * 100), f: Math.round((f / tot) * 100) } : null;
+}
 export const fijoOn = (data, clave) => { const f = data.menu.fijos[clave]; return f && f.on ? f : null; };
 export const comidasDelDia = (data) => ['desayuno', 'media', 'merienda'].filter((c) => fijoOn(data, c)).concat(['comida', 'cena']);
 
-export function totalDia(data, d) {
+export function totalDia(data, d, { extras = true } = {}) {
   const dm = diaMenu(data, d); if (!dm) return null;
-  let k = 0, p = 0, libre = false;
-  for (const c of ['desayuno', 'media', 'merienda']) { const f = fijoOn(data, c); if (f) { const s = sumaItems(data, f.items); k += s.k; p += s.p; } }
+  let k = 0, p = 0, c = 0, f = 0, libre = false, completo = true;
+  const suma = (s) => { k += s.k; p += s.p; c += s.c; f += s.f; if (!s.completo) completo = false; };
+  for (const cl of ['desayuno', 'media', 'merienda']) { const fj = fijoOn(data, cl); if (fj) suma(sumaItems(data, fj.items)); }
   for (const m of ['comida', 'cena']) {
     const pl = dm[m]; if (!pl) continue;
-    if (pl.libre) { libre = true; k += data.perfil.libre.kcal; p += data.perfil.libre.prot; continue; }
-    const s = sumaItems(data, pl.items); k += s.k; p += s.p;
+    if (pl.libre) { libre = true; k += data.perfil.libre.kcal; p += data.perfil.libre.prot; completo = false; continue; }
+    suma(sumaItems(data, pl.items));
   }
-  return { k, p, libre };
+  const ex = extras ? sumaExtras(extrasDe(data, iso(d))) : { k: 0, p: 0, c: 0, f: 0 };
+  return { k: k + ex.k, p: p + ex.p, c: c + ex.c, f: f + ex.f, libre, completo, extras: ex.k };
 }
 export const objetivo = (data, d) => (esDiaGym(data, d) ? data.perfil.objetivos.gym : data.perfil.objetivos.sin);
 

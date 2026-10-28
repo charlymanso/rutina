@@ -1,7 +1,9 @@
 // Plan de ejemplo para quien empieza, y estructura vacía.
 import { iso, lunesDe, hoy } from './logic.js';
+import { buscarPorNombre } from './alimentos.js';
 
-const I = (n, u, k, p, s, pl) => ({ n, u, k, p, s, ...(pl ? { pl } : {}) });
+// Ingrediente de la base de alimentos, listo para guardar en el plan
+const desdeBase = (nombre) => { const { origen, ...a } = buscarPorNombre(nombre); return a; };
 const comida = (t, items) => ({ t, items });
 const libre = () => ({ t: 'Comida libre', libre: true, items: [] });
 const ej = (n, s, c = false) => ({ n, s, c });
@@ -23,23 +25,10 @@ export function emptyData() {
 
 export function makeTemplate() {
   const d = emptyData();
-  d.ingredientes = {
-    pollo: I('Pechuga de pollo', 'g', 120, 23, 'carne'), pavo: I('Pavo en filetes', 'g', 105, 22, 'carne'),
-    salmon: I('Salmón', 'g', 208, 20, 'pescado'), merluza: I('Merluza', 'g', 80, 17, 'pescado'),
-    atun: I('Atún al natural', 'g', 116, 26, 'despensa'),
-    huevo: I('Huevo', 'ud', 72, 6.3, 'lacteos', 'huevos'), yogur: I('Yogur griego 0 %', 'g', 59, 10, 'lacteos'),
-    tofu: I('Tofu firme', 'g', 120, 13, 'lacteos'),
-    arroz: I('Arroz', 'g', 360, 7, 'despensa'), pasta: I('Pasta', 'g', 350, 12, 'despensa'),
-    lentejas: I('Lentejas', 'g', 340, 24, 'despensa'), garbanzos: I('Garbanzos', 'g', 340, 20, 'despensa'),
-    avena: I('Copos de avena', 'g', 370, 13, 'despensa'), almendras: I('Almendras', 'g', 600, 21, 'despensa'),
-    aceite: I('Aceite de oliva', 'ml', 884, 0, 'despensa'),
-    patata: I('Patata', 'g', 77, 2, 'verdura'), brocoli: I('Brócoli', 'g', 34, 2.8, 'verdura'),
-    espinacas: I('Espinacas', 'g', 23, 2.9, 'verdura'), tomate: I('Tomate', 'g', 18, 0.9, 'verdura'),
-    pimiento: I('Pimiento', 'g', 26, 1, 'verdura'), cebolla: I('Cebolla', 'g', 40, 1.1, 'verdura'),
-    calabacin: I('Calabacín', 'g', 17, 1.2, 'verdura'),
-    platano: I('Plátano', 'ud', 90, 1, 'verdura', 'plátanos'), manzana: I('Manzana', 'ud', 80, 0.4, 'verdura', 'manzanas'),
-    pan: I('Pan integral', 'g', 250, 9, 'pan'),
-  };
+  const base = { pollo: 'Pechuga de pollo', pavo: 'Pechuga de pavo', salmon: 'Salmón', merluza: 'Merluza', atun: 'Atún al natural (lata)', huevo: 'Huevo', yogur: 'Yogur griego 0 %', tofu: 'Tofu firme',
+    arroz: 'Arroz blanco', pasta: 'Pasta', lentejas: 'Lentejas (secas)', garbanzos: 'Garbanzos (secos)', avena: 'Copos de avena', almendras: 'Almendras', aceite: 'Aceite de oliva',
+    patata: 'Patata', brocoli: 'Brócoli', espinacas: 'Espinacas', tomate: 'Tomate', pimiento: 'Pimiento', cebolla: 'Cebolla', calabacin: 'Calabacín', platano: 'Plátano', manzana: 'Manzana', pan: 'Pan integral' };
+  d.ingredientes = Object.fromEntries(Object.entries(base).map(([id, nombre]) => [id, desdeBase(nombre)]));
   d.perfil.objetivos = { gym: { kcal: 1700, prot: 100 }, sin: { kcal: 1550, prot: 95 } };
   d.menu.fijos.desayuno = { on: true, hora: '08:00', texto: 'Avena con yogur y plátano', items: [['avena', 50], ['yogur', 150], ['platano', 1]] };
   d.menu.fijos.media = { on: true, hora: '11:00', texto: 'Una manzana y un puñado de almendras', items: [['manzana', 1], ['almendras', 20]] };
@@ -72,6 +61,9 @@ export function normalize(raw) {
   out.menu.semanas = out.menu.semanas.map((w) => Array.from({ length: 7 }, (_, i) => ({ comida: null, cena: null, ...((w || [])[i] || {}) })));
   out.entreno = { ...base.entreno, ...(d.entreno || {}) };
   if (!Array.isArray(out.entreno.sesiones)) out.entreno.sesiones = [];
+  for (const g of Object.values(out.ingredientes || {})) {          // datos de versiones anteriores: añade hidratos y grasa si el alimento está en la base
+    if (g && g.c == null && g.f == null) { const b = buscarPorNombre(g.n); if (b && b.u === g.u) { g.c = b.c; g.f = b.f; } }
+  }
   for (const k of ['ingredientes', 'dias', 'compra', 'agenda']) if (!out[k] || typeof out[k] !== 'object') out[k] = {};
   return out;
 }

@@ -2,6 +2,8 @@ import * as L from './logic.js';
 import { makeTemplate, emptyData, normalize } from './template.js';
 import { cargarClima } from './weather.js';
 import { store } from './store.js';
+import { BASE, buscarLocal, normalizar } from './alimentos.js';
+import { buscarOnline, porCodigo, esCodigoDeBarras } from './off.js';
 import { buscarActualizacion } from './update.js';
 import * as Nube from './cloud.js';
 import * as Sync from './sync.js';
@@ -91,51 +93,96 @@ const usoIngrediente = (id) => {
   return n;
 };
 
+const r1 = (n) => Math.round(n * 10) / 10;
+const f1 = (n) => r1(n).toLocaleString('es-ES', { maximumFractionDigits: 1 });
+const macroTxt = (t) => `${L.miles(t.k)} kcal · P ${f1(t.p)} g` + (t.completo ? ` · C ${f1(t.c)} g · G ${f1(t.f)} g` : '');
+const macroPor100 = (g) => `${g.k} kcal · P ${g.p}` + (g.c != null && g.f != null ? ` · C ${g.c} · G ${g.f}` : '') + (g.u === 'ud' ? ' · por unidad' : ` · por 100 ${g.u}`);
+const cantidadPorDefecto = (g) => g.por || (g.u === 'ud' ? 1 : 100);
+
+/* Buscador de alimentos: tus ingredientes, la base incluida y (en la app de escritorio) productos de supermercado. */
+function buscarAlimento({ titulo = 'Añadir alimento', onPick }) {
+  const q = h('input', { type: 'text', id: 'buscar-alimento', placeholder: 'Busca un alimento o escribe un código de barras', autocomplete: 'off' });
+  const lista = h('div', { class: 'stack', style: 'gap:16px' });
+  let timer = null, seq = 0, online = { estado: 'idle', items: [] };
+  const elegir = (a) => {
+    let id = a.id;
+    if (!id) { const base = L.slug(a.n) || 'alimento'; id = base; let c = 2; while (data.ingredientes[id]) id = `${base}-${c++}`; const { origen, code, ...ing } = a; data.ingredientes[id] = ing; commit(); }
+    sh.close(); onPick(id, cantidadPorDefecto(data.ingredientes[id]));
+  };
+  const fila = (a) => h('button', { class: 'row tap res', type: 'button', onclick: () => elegir(a) }, h('div', { class: 'grow' }, a.n, h('div', { class: 'sub num' }, macroPor100(a))), h('span', { class: 'chev' }, '+'));
+  const seccion = (titulo, ...hijos) => h('section', { class: 'stack', style: 'gap:6px' }, h('div', { class: 'label', style: 'padding-left:4px' }, titulo), ...hijos);
+  function pintar() {
+    const t = q.value.trim(), mios = ingOptions().map(([id, g]) => ({ ...g, id }));
+    const mis = t ? buscarLocal(t, mios, 8) : mios.slice(0, 8), nombresMios = new Set(mios.map((m) => normalizar(m.n)));
+    const base = t ? buscarLocal(t, BASE, 12).filter((a) => !nombresMios.has(normalizar(a.n))) : [];
+    const out = [];
+    if (mis.length) out.push(seccion(t ? 'Mis ingredientes' : 'Mis ingredientes recientes', h('div', { class: 'group' }, mis.map(fila))));
+    if (base.length) out.push(seccion('Base de alimentos', h('div', { class: 'group' }, base.map(fila))));
+    if (t.length >= 3) {
+      let cuerpo;
+      if (online.estado === 'cargando') cuerpo = h('p', { class: 'mute small', style: 'padding-left:4px' }, 'Buscando productos…');
+      else if (online.estado === 'noapp') cuerpo = h('p', { class: 'mute small', style: 'padding-left:4px' }, 'La búsqueda de productos de marca está disponible en la app de escritorio.');
+      else if (online.estado === 'error') cuerpo = h('p', { class: 'mute small', style: 'padding-left:4px' }, 'No se pudo consultar la base online. Revisa tu conexión; puedes usar tus ingredientes y la base incluida.');
+      else if (online.estado === 'ok') cuerpo = online.items.length ? h('div', { class: 'group' }, online.items.map(fila)) : h('p', { class: 'mute small', style: 'padding-left:4px' }, esCodigoDeBarras(t) ? 'No hay ningún producto con ese código.' : 'Sin resultados de productos.');
+      if (cuerpo) out.push(seccion('Productos de supermercado', cuerpo, h('p', { class: 'mute', style: 'font-size:12px;padding-left:4px' }, 'Datos de Open Food Facts, aportados por usuarios. Pueden contener errores.')));
+    }
+    if (!out.length) out.push(h('p', { class: 'mute small', style: 'text-align:center;padding:18px 0' }, t ? 'No hay coincidencias. Prueba con otra palabra o crea el alimento a mano.' : 'Escribe para buscar.'));
+    lista.replaceChildren(...out);
+  }
+  async function consultar() {
+    const t = q.value.trim(), mi = ++seq; if (t.length < 3) { online = { estado: 'idle', items: [] }; return pintar(); }
+    online = { estado: 'cargando', items: [] }; pintar();
+    try {
+      const r = esCodigoDeBarras(t) ? [await porCodigo(t)].filter(Boolean) : await buscarOnline(t);
+      if (mi !== seq) return; online = r === null ? { estado: 'noapp', items: [] } : { estado: 'ok', items: r };
+    } catch { if (mi !== seq) return; online = { estado: esCodigoDeBarras(t) || (window.rutina && window.rutina.buscarAlimentos) ? 'error' : 'noapp', items: [] }; }
+    pintar();
+  }
+  q.addEventListener('input', () => { pintar(); clearTimeout(timer); timer = setTimeout(consultar, 450); });
+  const sh = sheet({ title: titulo, body: [q, lista], extra: h('button', { class: 'btn plain', id: 'crear-alimento', onclick: () => editIngrediente(null, (id) => { sh.close(); onPick(id, cantidadPorDefecto(data.ingredientes[id])); }, { n: q.value.trim() }) }, 'Crear uno nuevo…') });
+  pintar();
+}
+
 /* Editor de lista de ingredientes con cantidades (para platos y comidas fijas). */
-function itemsEditor(items) {
+function itemsEditor(items, onChange = () => {}) {
   const box = h('div', { class: 'stack', style: 'gap:10px' });
   function draw() {
     box.replaceChildren();
-    if (!ingOptions().length) box.append(h('p', { class: 'mute small' }, 'Todavía no tienes ingredientes. Crea el primero para poder añadirlo.'));
     items.forEach((it, i) => {
-      const sel = h('select', { 'aria-label': 'Ingrediente', value: it[0], onchange: (e) => {
-        if (e.target.value === '__new') { e.target.value = it[0]; editIngrediente(null, (id) => { it[0] = id; draw(); }); return; }
-        it[0] = e.target.value; draw();
-      } },
-        !data.ingredientes[it[0]] ? h('option', { value: it[0] }, it[0]) : null,
-        ingOptions().map(([id, g]) => h('option', { value: id }, g.n)), h('option', { value: '__new' }, 'Nuevo ingrediente…'));
-      box.append(h('div', { class: 'itemrow' }, sel,
-        h('input', { type: 'number', min: 0, step: 'any', value: String(it[1]), 'aria-label': 'Cantidad', oninput: (e) => { it[1] = num(e.target.value); } }),
-        h('span', { class: 'u' }, L.ing(data, it[0]).u),
-        h('button', { class: 'x', 'aria-label': 'Quitar', onclick: () => { items.splice(i, 1); draw(); } }, '×')));
+      const sub = h('div', { class: 'sub-line num' }, macroTxt(L.sumaItems(data, [it])));
+      const sel = h('select', { 'aria-label': 'Ingrediente', value: it[0], onchange: (e) => { it[0] = e.target.value; draw(); onChange(); } },
+        !data.ingredientes[it[0]] ? h('option', { value: it[0] }, it[0]) : null, ingOptions().map(([id, g]) => h('option', { value: id }, g.n)));
+      box.append(h('div', { class: 'itemblock' }, h('div', { class: 'itemrow' }, sel,
+        h('input', { type: 'number', min: 0, step: 'any', value: String(it[1]), 'aria-label': 'Cantidad', oninput: (e) => { it[1] = num(e.target.value); sub.textContent = macroTxt(L.sumaItems(data, [it])); onChange(); } }),
+        h('span', { class: 'u' }, L.ing(data, it[0]).u), h('button', { class: 'x', 'aria-label': 'Quitar', onclick: () => { items.splice(i, 1); draw(); onChange(); } }, '×')), sub));
     });
-    box.append(h('button', { class: 'btn sec', style: 'align-self:flex-start', onclick: () => {
-      if (!ingOptions().length) { editIngrediente(null, (id) => { items.push([id, L.ing(data, id).u === 'ud' ? 1 : 100]); draw(); }); return; }
-      const id = ingOptions()[0][0]; items.push([id, L.ing(data, id).u === 'ud' ? 1 : 100]); draw();
-    } }, '+ Ingrediente'));
+    box.append(h('button', { class: 'btn sec', id: 'anadir-alimento', style: 'align-self:flex-start', onclick: () => buscarAlimento({ onPick: (id, q) => { items.push([id, q]); draw(); onChange(); } }) }, '+ Añadir alimento'));
   }
-  draw();
-  return box;
+  draw(); box.redraw = draw; return box;
 }
 
 /* ---------- editores ---------- */
-function editIngrediente(id, onDone) {
-  const g = id ? clone(data.ingredientes[id]) : { n: '', u: 'g', k: 0, p: 0, s: 'despensa', pl: '' };
+function editIngrediente(id, onDone, relleno = {}) {
+  const g = id ? clone(data.ingredientes[id]) : { n: '', u: 'g', k: 0, p: 0, s: 'despensa', pl: '', ...relleno };
   const nombre = h('input', { type: 'text', value: g.n, placeholder: 'Ej. Pechuga de pollo' });
-  const unidad = h('select', { value: g.u, onchange: () => { lk.firstChild.textContent = lbl(); pl.hidden = unidad.value !== 'ud'; } }, [['g', 'Gramos (g)'], ['ml', 'Mililitros (ml)'], ['ud', 'Unidades']].map(([v, t]) => h('option', { value: v }, t)));
-  const lbl = () => (unidad.value === 'ud' ? 'Calorías por unidad' : `Calorías por 100 ${unidad.value}`);
-  const kcal = h('input', { type: 'number', min: 0, step: 'any', value: String(g.k) });
-  const prot = h('input', { type: 'number', min: 0, step: 'any', value: String(g.p) });
-  const lk = field(lbl(), kcal);
+  const unidad = h('select', { value: g.u, onchange: () => { for (const [campo, txt] of etiquetas) campo.firstChild.textContent = txt(); pl.hidden = unidad.value !== 'ud'; } }, [['g', 'Gramos (g)'], ['ml', 'Mililitros (ml)'], ['ud', 'Unidades']].map(([v, t]) => h('option', { value: v }, t)));
+  const por = () => (unidad.value === 'ud' ? 'por unidad' : `por 100 ${unidad.value}`);
+  const num0 = (v) => h('input', { type: 'number', min: 0, step: 'any', value: v == null ? '' : String(v), placeholder: '—' });
+  const kcal = num0(g.k), prot = num0(g.p), carb = num0(g.c), grasa = num0(g.f);
+  const campos = [field(`Calorías ${por()}`, kcal), field(`Proteína ${por()} (g)`, prot), field(`Hidratos ${por()} (g)`, carb), field(`Grasa ${por()} (g)`, grasa)];
+  const etiquetas = [[campos[0], () => `Calorías ${por()}`], [campos[1], () => `Proteína ${por()} (g)`], [campos[2], () => `Hidratos ${por()} (g)`], [campos[3], () => `Grasa ${por()} (g)`]];
   const seccion = h('select', { value: g.s }, L.SECC.map(([v, t]) => h('option', { value: v }, t)));
   const plural = h('input', { type: 'text', value: g.pl || '', placeholder: 'Ej. huevos' });
   const pl = field('Plural (para la lista)', plural); pl.hidden = g.u !== 'ud';
   sheet({ title: id ? 'Editar ingrediente' : 'Nuevo ingrediente',
-    body: [field('Nombre', nombre), field('Se mide en', unidad), lk, field(unidad.value === 'ud' ? 'Proteína por unidad (g)' : 'Proteína por 100 (g)', prot), pl, field('Sección del súper', seccion)],
+    body: [field('Nombre', nombre), field('Se mide en', unidad), h('div', { class: 'pair' }, campos[0], campos[1]), h('div', { class: 'pair' }, campos[2], campos[3]),
+      h('p', { class: 'mute small' }, 'Hidratos y grasa son opcionales; sin ellos no se calcula el reparto de macros.'), pl, field('Sección del súper', seccion)],
     onSave: () => {
       const n = nombre.value.trim(); if (!n) return 'Escribe un nombre.';
       let nid = id; if (!nid) { const base = L.slug(n) || 'ingrediente'; nid = base; let c = 2; while (data.ingredientes[nid]) nid = `${base}-${c++}`; }
-      data.ingredientes[nid] = { n, u: unidad.value, k: num(kcal.value), p: num(prot.value), s: seccion.value, ...(unidad.value === 'ud' && plural.value.trim() ? { pl: plural.value.trim() } : {}) };
+      const opc = (i) => (i.value.trim() === '' ? {} : null);
+      data.ingredientes[nid] = { n, u: unidad.value, k: num(kcal.value), p: num(prot.value), ...(carb.value.trim() !== '' ? { c: num(carb.value) } : {}), ...(grasa.value.trim() !== '' ? { f: num(grasa.value) } : {}),
+        s: seccion.value, ...(g.por ? { por: g.por } : {}), ...(unidad.value === 'ud' && plural.value.trim() ? { pl: plural.value.trim() } : {}) };
       commit(); onDone && onDone(nid);
     },
     extra: id ? h('button', { class: 'btn danger', onclick: () => {
@@ -144,18 +191,31 @@ function editIngrediente(id, onDone) {
     } }, 'Borrar') : null });
 }
 
+function platosGuardados() { // platos distintos que ya usas en cualquier semana, para reutilizarlos
+  const m = new Map();
+  data.menu.semanas.forEach((wk) => wk.forEach((d) => ['comida', 'cena'].forEach((k) => { const pl = d[k]; if (pl && !pl.libre && pl.items && pl.items.length && !m.has(pl.t)) m.set(pl.t, pl); })));
+  return [...m.values()].sort((a, b) => a.t.localeCompare(b.t, 'es'));
+}
+
 function editPlato(semana, i, m) {
   const orig = semana[i][m], w = clone(orig || { t: '', items: [] }); if (!w.items) w.items = [];
-  const nombre = h('input', { type: 'text', value: w.t === 'Comida libre' && w.libre ? '' : w.t, placeholder: m === 'comida' ? 'Ej. Pollo con arroz' : 'Ej. Tortilla de espinacas' });
+  const nombre = h('input', { type: 'text', id: 'plato-nombre', value: w.t === 'Comida libre' && w.libre ? '' : w.t, placeholder: m === 'comida' ? 'Ej. Pollo con arroz' : 'Ej. Tortilla de espinacas' });
   const cuerpo = h('div', { class: 'stack', style: 'gap:14px' });
-  const edit = itemsEditor(w.items);
+  const total = h('div', { class: 'macros-live num', id: 'plato-total', 'aria-live': 'polite' });
+  const pintarTotal = () => { total.textContent = 'Por persona: ' + macroTxt(L.sumaItems(data, w.items)); };
+  const edit = itemsEditor(w.items, pintarTotal);
+  const guardados = platosGuardados().filter((p) => p.t !== (orig && orig.t));
+  const reuse = guardados.length ? h('select', { id: 'plato-reusar', 'aria-label': 'Usar un plato que ya tengo', onchange: (e) => {
+    const pl = guardados.find((p) => p.t === e.target.value); if (!pl) return;
+    nombre.value = pl.t; w.items.splice(0, w.items.length, ...clone(pl.items)); edit.redraw(); pintarTotal(); e.target.value = '';
+  } }, h('option', { value: '' }, 'Usar un plato que ya tengo…'), guardados.map((p) => h('option', { value: p.t }, p.t))) : null;
   function draw() {
     cuerpo.replaceChildren(
       h('div', { class: 'row', style: 'padding:0;min-height:0' }, h('div', { class: 'grow' }, 'Comida libre', h('div', { class: 'sub' }, 'Sin ingredientes: cuenta con tus calorías de comida libre.')),
         swt(w.libre, () => { w.libre = !w.libre; draw(); }, 'Comida libre')),
-      ...(w.libre ? [] : [field('Nombre del plato', nombre), h('div', { class: 'label' }, 'Ingredientes por persona'), edit]));
+      ...(w.libre ? [] : [reuse, field('Nombre del plato', nombre), h('div', { class: 'label' }, 'Ingredientes por persona'), edit, total]));
   }
-  draw();
+  draw(); pintarTotal();
   sheet({ title: `${L.DIAS[i]} · ${m === 'comida' ? 'Comida' : 'Cena'}`, body: cuerpo,
     onSave: () => {
       if (w.libre) { semana[i][m] = { t: 'Comida libre', libre: true, items: [] }; commit(); return; }
@@ -228,6 +288,38 @@ function setEj(f, k, patch) { const d = diaReg(f); d.gym = d.gym || {}; d.gym[k]
 async function refreshClima() {
   const c = await cargarClima(data);
   if (c && JSON.stringify(c) !== JSON.stringify(data.clima)) { data.clima = c; guardarLocal(); }
+}
+
+
+/* ---------- extras (comida fuera del plan) ---------- */
+function anadirExtra(f) {
+  buscarAlimento({ titulo: 'Añadir comida', onPick: (id, q0) => {
+    const g = L.ing(data, id), cant = h('input', { type: 'number', id: 'extra-cant', min: 0, step: 'any', value: String(q0) });
+    const tipo = h('select', { id: 'extra-tipo', value: 'snack' }, [['desayuno', 'Desayuno'], ['comida', 'Comida'], ['cena', 'Cena'], ['snack', 'Snack']].map(([v, t]) => h('option', { value: v }, t)));
+    const vista = h('div', { class: 'macros-live num' }), calc = () => { vista.textContent = macroTxt(L.sumaItems(data, [[id, num(cant.value)]])); };
+    cant.addEventListener('input', calc); calc();
+    sheet({ title: g.n, save: 'Añadir', body: [field(`Cantidad (${g.u === 'ud' ? 'unidades' : g.u})`, cant), field('Comida', tipo), vista],
+      onSave: () => {
+        const q = num(cant.value); if (!(q > 0)) return 'Escribe una cantidad.';
+        const sm = L.sumaItems(data, [[id, q]]), d = diaReg(f); d.extras = d.extras || [];
+        d.extras.push({ n: g.n, q, u: g.u, k: Math.round(sm.k), p: r1(sm.p), c: r1(sm.c), f: r1(sm.f), tipo: tipo.value }); commit();
+      } });
+  } });
+}
+function extrasCard(f) {
+  const ex = L.extrasDe(data, f);
+  return h('section', { class: 'stack', style: 'gap:8px' },
+    h('div', { class: 'row', style: 'padding:0 4px;min-height:0' }, h('div', { class: 'label grow' }, 'Extras de hoy'), h('button', { class: 'btn plain', id: 'add-extra', onclick: () => anadirExtra(f) }, '+ Añadir comida')),
+    ex.length ? h('div', { class: 'group' }, ex.map((e, i) => h('div', { class: 'row' }, h('div', { class: 'grow' }, e.n, h('div', { class: 'sub num' }, `${f1(e.q)} ${e.u === 'ud' ? 'ud' : e.u} · ${e.k} kcal · P ${f1(e.p)} g`)),
+      h('button', { class: 'chev', 'aria-label': 'Quitar ' + e.n, onclick: () => { ex.splice(i, 1); commit(); } }, '×'))))
+      : h('p', { class: 'mute small', style: 'padding-left:4px' }, 'Lo que comas fuera del plan se suma a tu día.'));
+}
+function macroBar(t) {
+  const r = L.repartoMacros(t); if (!r || !t.completo) return null;
+  const punto = (c, txt) => h('span', { class: 'leg' }, h('b', { class: 'dot ' + c }), txt);
+  return h('div', { class: 'metric' }, h('div', { class: 'top' }, h('span', { class: 'label' }, 'Reparto de energía'), h('span', { class: 'mute small num' }, `C ${f1(t.c)} g · G ${f1(t.f)} g`)),
+    h('div', { class: 'stackbar', role: 'img', 'aria-label': `Proteína ${r.p} %, hidratos ${r.c} %, grasa ${r.f} %` }, h('i', { class: 'sp', style: `width:${r.p}%` }), h('i', { class: 'sc', style: `width:${r.c}%` }), h('i', { class: 'sf', style: `width:${r.f}%` })),
+    h('div', { class: 'legend' }, punto('sp', `Proteína ${r.p} %`), punto('sc', `Hidratos ${r.c} %`), punto('sf', `Grasa ${r.f} %`)));
 }
 
 /* ---------- vistas ---------- */
@@ -306,10 +398,10 @@ function viewHoy() {
     recordatorioCuenta(),
     h('div', { class: 'cols' },
       h('div', { class: 'stack' }, slots.length ? h('div', { class: 'group' }, slots.map((s) => slotEl(s, f, sig && sig.k, !!hechos[s.k]))) :
-        h('div', { class: 'card empty' }, h('p', {}, 'Hoy no tienes nada en el plan.'), h('button', { class: 'btn', onclick: () => go('semana') }, 'Preparar el menú'))),
+        h('div', { class: 'card empty' }, h('p', {}, 'Hoy no tienes nada en el plan.'), h('button', { class: 'btn', onclick: () => go('semana') }, 'Preparar el menú')), extrasCard(f)),
       h('div', { class: 'stack' }, resumenCard(f),
-        t ? h('section', { class: 'card' }, h('h2', { class: 'sec' }, 'Nutrición'), metric('Proteína', t.p, o.prot, 'g'), metric('Energía', t.k, o.kcal, 'kcal'),
-          h('p', { class: 'mute small' }, 'Estimación según lo planeado' + (t.libre ? `; cuenta unas ${L.miles(data.perfil.libre.kcal)} kcal por la comida libre.` : '.'))) : null,
+        t ? h('section', { class: 'card' }, h('h2', { class: 'sec' }, 'Nutrición'), metric('Proteína', t.p, o.prot, 'g'), metric('Energía', t.k, o.kcal, 'kcal'), macroBar(t),
+          h('p', { class: 'mute small' }, 'Estimación según lo planeado' + (t.extras ? ` más ${L.miles(t.extras)} kcal de extras` : '') + (t.libre ? `; cuenta unas ${L.miles(data.perfil.libre.kcal)} kcal por la comida libre.` : '.'))) : null,
         h('section', { class: 'card' }, h('h2', { class: 'sec' }, 'Progreso'),
           h('div', { class: 'metric' }, h('div', { class: 'top' }, h('span', { class: 'label' }, 'Hecho hoy'), h('span', { class: 'num mute small' }, `${hechas} de ${slots.length}`)), h('div', { class: 'bar' }, h('i', { style: `width:${slots.length ? hechas / slots.length * 100 : 0}%` }))),
           h('div', { class: 'label' }, 'Comidas de los últimos 7 días'), h('div', { class: 'week7' }, siete),
@@ -317,18 +409,27 @@ function viewHoy() {
 }
 
 function platoBtn(semana, i, m) {
-  const pl = semana[i][m];
+  const pl = semana[i][m], s = pl && !pl.libre ? L.sumaItems(data, pl.items) : null;
   return h('button', { class: 'plato', onclick: () => editPlato(semana, i, m) }, h('span', { class: 'label' }, m === 'comida' ? 'Comida' : 'Cena'),
-    pl ? [h('h3', {}, pl.libre ? 'Comida libre' : pl.t), pl.libre ? null : h('p', { class: 'det' }, itemsText(pl.items))] : h('h3', { class: 'add' }, '+ Añadir'));
+    pl ? [h('h3', {}, pl.libre ? 'Comida libre' : pl.t), pl.libre ? h('p', { class: 'det num' }, `~${L.miles(data.perfil.libre.kcal)} kcal`) : [h('p', { class: 'det num kc' }, `${L.miles(s.k)} kcal · P ${f1(s.p)} g`), h('p', { class: 'det' }, itemsText(pl.items))]] : h('h3', { class: 'add' }, '+ Añadir'));
 }
 function viewSemana() {
   const lun = L.addDays(L.lunesDe(L.hoy()), S.semSel * 7), w = L.semanaIdx(data, lun), semana = data.menu.semanas[w], fh = L.iso(L.hoy()), n = data.menu.semanas.length;
+  const dias = semana.map((_, i) => { const d = L.addDays(lun, i); return { d, i, t: L.totalDia(data, d, { extras: false }), o: L.objetivo(data, d) }; });
+  const conPlan = dias.filter((x) => x.t && x.t.k > 0), media = conPlan.length ? { k: conPlan.reduce((a, x) => a + x.t.k, 0) / conPlan.length, p: conPlan.reduce((a, x) => a + x.t.p, 0) / conPlan.length } : null;
   return h('div', { class: 'page' },
     h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, 'Menú'), h('p', { class: 'subtitle' }, n > 1 ? `Semana ${w + 1} de ${n} del ciclo` : 'Se repite cada semana')),
       seg([[0, 'Esta semana'], [1, 'La que viene']], S.semSel, (v) => { S.semSel = v; render(); })),
-    h('p', { class: 'mute small' }, 'Toca un plato para editarlo. Las cantidades son por persona.'),
-    h('div', { class: 'group' }, semana.map((_, i) => { const d = L.addDays(lun, i);
-      return h('div', { class: 'dayrow' + (L.iso(d) === fh ? ' hoy' : '') }, h('div', { class: 'dn' }, L.DIAS[i], h('small', {}, L.fechaCorta(d) + (L.sesionGym(data, i) ? ' · con entreno' : ''))), platoBtn(semana, i, 'comida'), platoBtn(semana, i, 'cena')); })));
+    media ? h('div', { class: 'card', style: 'flex-direction:row;flex-wrap:wrap;gap:12px 32px' },
+      h('div', { class: 'metric' }, h('span', { class: 'label' }, 'Media diaria'), h('b', { class: 'num', id: 'media-kcal' }, `${L.miles(media.k)} kcal`)),
+      h('div', { class: 'metric' }, h('span', { class: 'label' }, 'Proteína media'), h('b', { class: 'num', id: 'media-prot' }, `${L.miles(media.p)} g`)),
+      h('div', { class: 'metric' }, h('span', { class: 'label' }, 'Objetivo medio'), h('b', { class: 'num' }, `${L.miles(dias.reduce((a, x) => a + x.o.kcal, 0) / 7)} kcal`))) : null,
+    h('p', { class: 'mute small' }, 'Toca un plato para editarlo. Las cantidades son por persona. Las calorías se actualizan al cambiar los ingredientes.'),
+    h('div', { class: 'group' }, dias.map(({ d, i, t, o }) => {
+      const pct = t && o.kcal ? Math.min(100, t.k / o.kcal * 100) : 0, pasa = t && o.kcal && t.k > o.kcal * 1.1;
+      return h('div', { class: 'dayrow' + (L.iso(d) === fh ? ' hoy' : '') }, h('div', { class: 'dn' }, L.DIAS[i], h('small', {}, L.fechaCorta(d) + (L.sesionGym(data, i) ? ' · con entreno' : '')),
+        t && t.k > 0 ? h('div', { class: 'dtot num' }, h('span', { class: pasa ? 'over' : '' }, `${L.miles(t.k)} kcal`), h('span', { class: 'mute' }, ` · P ${L.miles(t.p)} g`), h('div', { class: 'bar' + (pasa ? ' warn' : '') }, h('i', { style: `width:${pct}%` }))) : null),
+        platoBtn(semana, i, 'comida'), platoBtn(semana, i, 'cena')); })));
 }
 
 function viewCompra() {
@@ -387,7 +488,7 @@ function viewAjustes() {
       if (v === data.menu.semanas.length) return; if (v === 2) data.menu.semanas.push(clone(data.menu.semanas[0])); else data.menu.semanas = data.menu.semanas.slice(0, 1); commit(); }), 'Con 2, el menú alterna entre dos semanas.'),
       data.menu.semanas.length > 1 ? tapRow('Empezar el ciclo esta semana', 'La semana actual pasa a ser la 1.', () => { data.menu.ancla = L.iso(L.lunesDe(L.hoy())); commit(); toast('Ciclo reiniciado.'); }) : null),
     h('section', { class: 'stack', style: 'gap:8px' }, h('div', { class: 'row', style: 'padding:0 4px' }, h('div', { class: 'label grow' }, `Ingredientes · ${ings.length}`), h('button', { class: 'btn plain', onclick: () => editIngrediente(null) }, '+ Añadir')),
-      ings.length ? h('div', { class: 'group' }, ings.map(([id, g]) => tapRow(g.n, `${g.k} kcal · ${g.p} g prot. ${g.u === 'ud' ? 'por unidad' : 'por 100 ' + g.u}`, () => editIngrediente(id)))) : h('p', { class: 'mute small' }, 'Aún no hay ingredientes.')),
+      ings.length ? h('div', { class: 'group' }, ings.map(([id, g]) => tapRow(g.n, macroPor100(g), () => editIngrediente(id)))) : h('p', { class: 'mute small' }, 'Aún no hay ingredientes.')),
     grupo('Acerca de Rutina', rowOf('Versión', h('span', { class: 'mute num' }, S.version || '—')),
       h('a', { class: 'row tap', href: 'https://charlymanso.github.io/rutina/', target: '_blank', rel: 'noopener' }, h('div', { class: 'grow' }, 'Sitio web'), h('span', { class: 'chev' }, '›')),
       h('a', { class: 'row tap', href: 'https://charlymanso.github.io/rutina/privacidad.html', target: '_blank', rel: 'noopener' }, h('div', { class: 'grow' }, 'Política de privacidad'), h('span', { class: 'chev' }, '›'))),

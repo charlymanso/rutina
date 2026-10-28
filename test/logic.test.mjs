@@ -25,15 +25,38 @@ assert.equal(L.esDiaGym(d, lun), true);
 assert.equal(L.esDiaGym(d, L.addDays(lun, 1)), false);
 assert.equal(L.objetivo(d, lun).kcal, 1700);
 
-// nutrición: lunes = avena50+yogur150+plátano + manzana+almendras + pollo/arroz/brócoli/aceite + tortilla
+// nutrición: lunes = avena50+yogur150+plátano + manzana+almendras + pollo150/arroz80/brócoli150/aceite10 + huevo3/espinacas100/aceite5
+const g = (id) => d.ingredientes[id];
+const esperado = g('avena').k * .5 + g('yogur').k * 1.5 + g('platano').k + g('manzana').k + g('almendras').k * .2 + g('pollo').k * 1.5 + g('arroz').k * .8 + g('brocoli').k * 1.5 + g('aceite').k * .1 + g('huevo').k * 3 + g('espinacas').k + g('aceite').k * .05;
 const t = L.totalDia(d, lun);
-const esperado = 370 / 2 + 59 * 1.5 + 90 + 80 + 120 + 120 * 1.5 + 360 * .8 + 34 * 1.5 + 88.4 + 72 * 3 + 23 * 1 + 44.2;
 assert.ok(Math.abs(t.k - esperado) < 1, `kcal ${t.k} vs ${esperado}`);
 assert.ok(t.p > 80 && t.p < 160, `proteína ${t.p}`);
-// día con comida libre suma el valor de comida libre
+assert.equal(t.completo, true, 'la plantilla trae hidratos y grasa de todos los ingredientes');
+assert.ok(Math.abs(t.k - (t.p * 4 + t.c * 4 + t.f * 9)) < t.k * 0.12, 'las calorías cuadran con los macros (±12 %)');
+const rp = L.repartoMacros(t); assert.ok(rp && rp.p + rp.c + rp.f >= 99 && rp.p + rp.c + rp.f <= 101, 'el reparto suma ~100 %');
+// día con comida libre suma el valor de comida libre y se marca incompleto
 const sab = L.totalDia(d, L.addDays(lun, 5));
-assert.equal(sab.libre, true);
-console.log('kcal lunes', Math.round(t.k), 'prot', Math.round(t.p), '| sábado', Math.round(sab.k), Math.round(sab.p));
+assert.equal(sab.libre, true); assert.equal(sab.completo, false);
+console.log('kcal lunes', Math.round(t.k), 'prot', Math.round(t.p), 'hidr', Math.round(t.c), 'grasa', Math.round(t.f), '| sábado', Math.round(sab.k), Math.round(sab.p));
+
+// extras del día (diario tipo "comida fuera del plan")
+const f0 = L.iso(lun); d.dias[f0] = { extras: [{ n: 'Barrita', q: 1, u: 'ud', k: 200, p: 10, c: 20, f: 8, tipo: 'snack' }] };
+assert.equal(Math.round(L.totalDia(d, lun).k - t.k), 200); assert.equal(L.totalDia(d, lun, { extras: false }).k, t.k, 'el menú semanal no cuenta extras');
+delete d.dias[f0];
+
+// ingredientes sin macros (versión antigua) → incompleto; normalize los recupera si están en la base
+const viejo = { ...d, ingredientes: { ...d.ingredientes, raro: { n: 'Cosa rara', u: 'g', k: 100, p: 5, s: 'despensa' } } };
+viejo.menu = { ...d.menu, semanas: [[{ comida: { t: 'x', items: [['raro', 100]] }, cena: null }, ...d.menu.semanas[0].slice(1)]] };
+assert.equal(L.totalDia(viejo, lun).completo, false);
+const migrado = normalize({ ingredientes: { pollo: { n: 'Pechuga de pollo', u: 'g', k: 120, p: 23, s: 'carne' } } });
+assert.equal(migrado.ingredientes.pollo.f, 2.6, 'normalize rellena grasa/hidratos desde la base');
+
+// buscador local
+import { BASE, buscarLocal } from '../src/alimentos.js';
+assert.ok(BASE.length > 100);
+assert.equal(buscarLocal('POLLO')[0].n, 'Pechuga de pollo'); assert.equal(buscarLocal('platano')[0].n, 'Plátano'); assert.deepEqual(buscarLocal('zzzz'), []);
+assert.ok(buscarLocal('yogur gri').every((a) => a.n.toLowerCase().includes('griego')), 'varias palabras = todas deben aparecer');
+for (const a of BASE.filter((x) => !/Cerveza|Vino/.test(x.n) && x.u !== 'ud')) assert.ok(Math.abs(a.k - (a.p * 4 + a.c * 4 + a.f * 9)) <= a.k * 0.2 + 15, `${a.n}: kcal no cuadra con macros`);
 
 // lista de la compra
 d.perfil.personas = 1;

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, session, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, session, safeStorage, net } = require('electron');
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -73,6 +73,26 @@ ipcMain.handle('datos:importar', async (e) => {
   const r = await dialog.showOpenDialog(w, { properties: ['openFile'], filters: [{ name: 'Copia de Rutina', extensions: ['json'] }] });
   if (r.canceled || !r.filePaths[0]) return null;
   try { return JSON.parse(fs.readFileSync(r.filePaths[0], 'utf8')); } catch { return null; }
+});
+
+// Base de alimentos online (Open Food Facts). Se consulta desde aquí porque su buscador no admite llamadas directas desde una página.
+const CAMPOS = 'code,product_name,brands,quantity,nutriments';
+const UA = () => ({ 'User-Agent': `Rutina/${app.getVersion()} (https://github.com/charlymanso/rutina)` });
+async function consultar(url) {
+  const r = await net.fetch(url, { headers: UA(), signal: AbortSignal.timeout(9000) });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+ipcMain.handle('alimentos:buscar', async (_e, q) => {
+  q = String(q || '').trim().slice(0, 80); if (q.length < 2) return [];
+  const u = new URL('https://search.openfoodfacts.org/search');
+  u.searchParams.set('q', q); u.searchParams.set('page_size', '20'); u.searchParams.set('langs', 'es'); u.searchParams.set('fields', CAMPOS);
+  return (await consultar(u.toString())).hits || [];
+});
+ipcMain.handle('alimentos:codigo', async (_e, codigo) => {
+  codigo = String(codigo || '').trim(); if (!/^\d{6,14}$/.test(codigo)) return null;
+  const j = await consultar(`https://world.openfoodfacts.org/api/v2/product/${codigo}?fields=${CAMPOS}`);
+  return j.status === 0 ? null : j.product || null;
 });
 
 // Sesión de la cuenta: se guarda cifrada con el llavero del sistema (Windows/Mac). Nunca va dentro del archivo de datos.
