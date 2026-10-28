@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacidad · Rutina</title>
+<link rel="icon" href="img/icon.png">
+<style>
+:root{
+  --bg:#fff;--alt:#f5f5f7;--ink:#1d1d1f;--muted:#6e6e73;--line:rgba(0,0,0,.1);--accent:#0071e3;--accent-ink:#fff;--card:#fff;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;color-scheme:light}
+@media(prefers-color-scheme:dark){:root{--bg:#000;--alt:#111113;--ink:#f5f5f7;--muted:#a1a1a6;--line:rgba(255,255,255,.14);--accent:#2997ff;--card:#1c1c1e;color-scheme:dark}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.47 var(--font);letter-spacing:-.011em;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+:focus-visible{outline:3px solid var(--accent);outline-offset:3px;border-radius:8px}
+.wrap{width:min(1020px,100% - 48px);margin-inline:auto}
+nav{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:52px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:600;color:var(--ink)}
+.logo img{width:26px;height:26px}
+.pill{display:inline-block;background:var(--accent);color:var(--accent-ink);padding:11px 24px;border-radius:980px;font-weight:500;font-size:17px}
+.pill:hover{text-decoration:none;filter:brightness(1.08)}
+.pill.small{padding:6px 14px;font-size:14px}
+.pill.ghost{background:none;color:var(--accent);padding-inline:12px}
+.hero{text-align:center;padding:84px 0 40px}
+h1{font-size:clamp(46px,8.4vw,88px);line-height:1.04;letter-spacing:-.045em;font-weight:700;margin:0;text-wrap:balance}
+.lead{font-size:clamp(19px,2.6vw,26px);line-height:1.3;color:var(--muted);max-width:640px;margin:22px auto 0;letter-spacing:-.02em;text-wrap:balance}
+.cta{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:32px}
+.fine{color:var(--muted);font-size:14px;margin-top:16px}
+.shot{margin:44px auto 0;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:0 0 0 1px var(--line),0 30px 80px rgba(0,0,0,.22);max-width:980px}
+.shot .bar{display:flex;gap:7px;padding:11px 14px;background:var(--alt);border-bottom:1px solid var(--line)}
+.shot .bar i{width:11px;height:11px;border-radius:50%;background:#ff5f57}.shot .bar i:nth-child(2){background:#febc2e}.shot .bar i:nth-child(3){background:#28c840}
+.shot img{display:block;width:100%;height:auto}
+section.feature{padding:96px 0}
+section.feature.alt{background:var(--alt)}
+.feature .grid{display:grid;gap:44px;align-items:center;grid-template-columns:1fr}
+@media(min-width:860px){.feature .grid{grid-template-columns:minmax(0,5fr) minmax(0,7fr)}.feature.flip .grid{grid-template-columns:minmax(0,7fr) minmax(0,5fr)}.feature.flip .text{order:2}}
+.eyebrow{font-size:14px;font-weight:600;color:var(--accent);letter-spacing:.01em;margin:0 0 10px}
+h2{font-size:clamp(32px,5vw,52px);line-height:1.08;letter-spacing:-.035em;font-weight:700;margin:0 0 16px;text-wrap:balance}
+.text p{color:var(--muted);font-size:19px;margin:0;max-width:34ch}
+.feature .shot{margin:0}
+.center{text-align:center}.center p{margin-inline:auto;max-width:560px;color:var(--muted);font-size:19px}
+.three{display:grid;gap:16px;grid-template-columns:1fr;margin-top:44px;text-align:left}
+@media(min-width:760px){.three{grid-template-columns:repeat(3,1fr)}}
+.tile{background:var(--card);border-radius:20px;padding:26px;border:1px solid var(--line)}
+.tile h3{margin:0 0 8px;font-size:21px;letter-spacing:-.02em}.tile p{margin:0;color:var(--muted);font-size:16px}
+#descargar{padding:96px 0;text-align:center}
+.dl{display:grid;gap:16px;grid-template-columns:1fr;margin-top:40px;text-align:left}
+@media(min-width:760px){.dl{grid-template-columns:1fr 1fr}}
+.dl .tile{display:flex;flex-direction:column;gap:14px;padding:30px}
+.dl h3{font-size:26px}
+.dl .row{display:flex;gap:10px;flex-wrap:wrap}
+.how{font-size:15px;color:var(--muted);max-width:620px;margin:36px auto 0;text-align:left;border-top:1px solid var(--line);padding-top:20px}
+details{border-top:1px solid var(--line);padding:18px 0}
+details:last-child{border-bottom:1px solid var(--line)}
+summary{font-size:19px;font-weight:600;cursor:pointer;letter-spacing:-.02em}
+details p{color:var(--muted);margin:10px 0 0;max-width:62ch}
+.faq{max-width:760px;margin:0 auto;padding-bottom:96px}
+footer{border-top:1px solid var(--line);padding:28px 0 44px;color:var(--muted);font-size:13px}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+<style>.doc{max-width:720px;margin:0 auto;padding:56px 0 80px}.doc h1{font-size:clamp(34px,6vw,52px);margin-bottom:8px}.doc h2{font-size:24px;margin:40px 0 8px;letter-spacing:-.02em}.doc p,.doc li{color:var(--muted);font-size:18px}.doc li{margin:6px 0}.doc strong{color:var(--ink)}</style>
+</head>
+<body>
+<nav><div class="wrap"><a class="logo" href="./"><img src="img/icon.png" alt="" width="26" height="26">Rutina</a><a class="pill small" href="./#descargar">Descargar</a></div></nav>
+<main class="wrap doc">
+<h1>Privacidad</h1>
+<p>Última actualización: 28 de octubre de 2026.</p>
+
+<h2>Lo esencial</h2>
+<p>Rutina guarda tu plan de comidas, tu lista de la compra y tus entrenos <strong>en un archivo de tu propio ordenador</strong>. No necesitas una cuenta para usarla. Solo si decides crear una, tus datos se guardan también en la nube para sincronizarlos.</p>
+
+<h2>Qué datos trata</h2>
+<ul>
+<li><strong>Sin cuenta:</strong> nada sale de tu ordenador, salvo la consulta del tiempo (ver más abajo).</li>
+<li><strong>Con cuenta:</strong> tu correo electrónico y, si entras con Google, tu nombre y tu correo de Google, además de tu plan y tus registros (menús, ingredientes, entrenos, kilos, marcas del día, recordatorios).</li>
+<li><strong>Contraseña:</strong> se guarda cifrada por el servicio de cuentas; nadie, ni el autor de Rutina, puede verla.</li>
+</ul>
+
+<h2>Dónde se guardan</h2>
+<p>Con cuenta, en <strong>Supabase</strong>, en servidores de la Unión Europea (Irlanda). Las reglas de la base de datos hacen que cada cuenta solo pueda ver y modificar sus propios datos.</p>
+
+<h2>Servicios externos</h2>
+<ul>
+<li><strong>Open-Meteo</strong>, solo si escribes tu ciudad, para mostrarte el tiempo. Se envía el nombre de la ciudad.</li>
+<li><strong>GitHub</strong>, para comprobar si hay una versión nueva de la app. No se envía ningún dato tuyo.</li>
+<li><strong>Google</strong>, solo si eliges entrar con Google.</li>
+</ul>
+
+<h2>Lo que no hacemos</h2>
+<p>No vendemos ni cedemos tus datos, no hay publicidad ni analítica, y no usamos tus datos para nada que no sea mostrarte tu propio plan.</p>
+
+<h2>Tus derechos</h2>
+<ul>
+<li>En <strong>Ajustes → Borrar todos mis datos</strong> eliminas tu plan del ordenador y, si tienes sesión iniciada, también la copia de la nube.</li>
+<li>Para eliminar tu cuenta por completo, o para cualquier duda sobre tus datos, abre una consulta en <a href="https://github.com/charlymanso/rutina/issues">github.com/charlymanso/rutina/issues</a>.</li>
+</ul>
+
+<h2>Cambios</h2>
+<p>Si esta política cambia, se actualizará en esta página con la nueva fecha.</p>
+</main>
+<footer><div class="wrap">Rutina · Mac y Windows</div></footer>
+</body>
+</html>
