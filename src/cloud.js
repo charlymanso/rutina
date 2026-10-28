@@ -9,7 +9,7 @@ let sesion = null;
 
 export const haySesion = () => !!sesion;
 export const usuario = () => (sesion ? sesion.user : null);
-export const puedeGoogle = () => !!(puente() && puente().oauth);
+export const puedeGoogle = () => !!(NUBE.google && puente() && puente().oauth);
 
 // ---- errores en lenguaje normal ----
 function amigable(status, j) {
