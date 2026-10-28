@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rutina · Tu día, claro</title>
+<meta name="description" content="Rutina reúne tus comidas, tu lista de la compra y tus entrenos en una app para Mac y Windows. Tus datos se quedan en tu ordenador.">
+<link rel="icon" href="img/icon.png">
+<style>
+:root{
+  --bg:#fff;--alt:#f5f5f7;--ink:#1d1d1f;--muted:#6e6e73;--line:rgba(0,0,0,.1);--accent:#0071e3;--accent-ink:#fff;--card:#fff;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;color-scheme:light}
+@media(prefers-color-scheme:dark){:root{--bg:#000;--alt:#111113;--ink:#f5f5f7;--muted:#a1a1a6;--line:rgba(255,255,255,.14);--accent:#2997ff;--card:#1c1c1e;color-scheme:dark}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.47 var(--font);letter-spacing:-.011em;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+:focus-visible{outline:3px solid var(--accent);outline-offset:3px;border-radius:8px}
+.wrap{width:min(1020px,100% - 48px);margin-inline:auto}
+nav{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:52px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:600;color:var(--ink)}
+.logo img{width:26px;height:26px}
+.pill{display:inline-block;background:var(--accent);color:var(--accent-ink);padding:11px 24px;border-radius:980px;font-weight:500;font-size:17px}
+.pill:hover{text-decoration:none;filter:brightness(1.08)}
+.pill.small{padding:6px 14px;font-size:14px}
+.pill.ghost{background:none;color:var(--accent);padding-inline:12px}
+.hero{text-align:center;padding:84px 0 40px}
+h1{font-size:clamp(46px,8.4vw,88px);line-height:1.04;letter-spacing:-.045em;font-weight:700;margin:0;text-wrap:balance}
+.lead{font-size:clamp(19px,2.6vw,26px);line-height:1.3;color:var(--muted);max-width:640px;margin:22px auto 0;letter-spacing:-.02em;text-wrap:balance}
+.cta{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:32px}
+.fine{color:var(--muted);font-size:14px;margin-top:16px}
+.shot{margin:44px auto 0;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:0 0 0 1px var(--line),0 30px 80px rgba(0,0,0,.22);max-width:980px}
+.shot .bar{display:flex;gap:7px;padding:11px 14px;background:var(--alt);border-bottom:1px solid var(--line)}
+.shot .bar i{width:11px;height:11px;border-radius:50%;background:#ff5f57}.shot .bar i:nth-child(2){background:#febc2e}.shot .bar i:nth-child(3){background:#28c840}
+.shot img{display:block;width:100%;height:auto}
+section.feature{padding:96px 0}
+section.feature.alt{background:var(--alt)}
+.feature .grid{display:grid;gap:44px;align-items:center;grid-template-columns:1fr}
+@media(min-width:860px){.feature .grid{grid-template-columns:minmax(0,5fr) minmax(0,7fr)}.feature.flip .grid{grid-template-columns:minmax(0,7fr) minmax(0,5fr)}.feature.flip .text{order:2}}
+.eyebrow{font-size:14px;font-weight:600;color:var(--accent);letter-spacing:.01em;margin:0 0 10px}
+h2{font-size:clamp(32px,5vw,52px);line-height:1.08;letter-spacing:-.035em;font-weight:700;margin:0 0 16px;text-wrap:balance}
+.text p{color:var(--muted);font-size:19px;margin:0;max-width:34ch}
+.feature .shot{margin:0}
+.center{text-align:center}.center p{margin-inline:auto;max-width:560px;color:var(--muted);font-size:19px}
+.three{display:grid;gap:16px;grid-template-columns:1fr;margin-top:44px;text-align:left}
+@media(min-width:760px){.three{grid-template-columns:repeat(3,1fr)}}
+.tile{background:var(--card);border-radius:20px;padding:26px;border:1px solid var(--line)}
+.tile h3{margin:0 0 8px;font-size:21px;letter-spacing:-.02em}.tile p{margin:0;color:var(--muted);font-size:16px}
+#descargar{padding:96px 0;text-align:center}
+.dl{display:grid;gap:16px;grid-template-columns:1fr;margin-top:40px;text-align:left}
+@media(min-width:760px){.dl{grid-template-columns:1fr 1fr}}
+.dl .tile{display:flex;flex-direction:column;gap:14px;padding:30px}
+.dl h3{font-size:26px}
+.dl .row{display:flex;gap:10px;flex-wrap:wrap}
+.how{font-size:15px;color:var(--muted);max-width:620px;margin:36px auto 0;text-align:left;border-top:1px solid var(--line);padding-top:20px}
+details{border-top:1px solid var(--line);padding:18px 0}
+details:last-child{border-bottom:1px solid var(--line)}
+summary{font-size:19px;font-weight:600;cursor:pointer;letter-spacing:-.02em}
+details p{color:var(--muted);margin:10px 0 0;max-width:62ch}
+.faq{max-width:760px;margin:0 auto;padding-bottom:96px}
+footer{border-top:1px solid var(--line);padding:28px 0 44px;color:var(--muted);font-size:13px}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<nav><div class="wrap"><a class="logo" href="#"><img src="img/icon.png" alt="" width="26" height="26">Rutina</a><a class="pill small" href="#descargar">Descargar</a></div></nav>
+
+<header class="hero wrap">
+  <h1>Tu día, claro.</h1>
+  <p class="lead">Comidas, compra y entrenos en una sola app para tu ordenador. Sin cuentas. Tus datos se quedan contigo.</p>
+  <div class="cta"><a class="pill" id="cta-main" href="#descargar">Descargar</a><a class="pill ghost" href="#hoy">Ver cómo es ›</a></div>
+  <p class="fine" id="cta-fine">Para macOS y Windows</p>
+  <div class="shot"><div class="bar"><i></i><i></i><i></i></div>
+    <picture><source srcset="img/hoy-dark.jpg" media="(prefers-color-scheme: dark)"><img src="img/hoy-light.jpg" width="1770" height="1140" alt="Pantalla Hoy de Rutina: desayuno, comida, entreno y cena con sus horas, y el progreso de proteína y energía"></picture></div>
+</header>
+
+<section class="feature alt" id="hoy"><div class="wrap grid">
+  <div class="text"><p class="eyebrow">Hoy</p><h2>Todo el día, de un vistazo.</h2><p>Desayuno, comida, entreno y cena en una línea con su hora. Marca lo que ya has hecho y mira cómo vas de proteína y calorías.</p></div>
+  <div class="shot"><div class="bar"><i></i><i></i><i></i></div><img loading="lazy" src="img/menu.jpg" width="1770" height="1140" alt="Menú semanal con la comida y la cena de cada día"></div>
+</div></section>
+
+<section class="feature flip"><div class="wrap grid">
+  <div class="text"><p class="eyebrow">Menú y compra</p><h2>Planea una vez. La compra sale sola.</h2><p>Escribe tu menú de la semana y Rutina suma los ingredientes, los ordena por secciones del súper y te deja copiar la lista.</p></div>
+  <div class="shot"><div class="bar"><i></i><i></i><i></i></div><img loading="lazy" src="img/compra.jpg" width="1770" height="1140" alt="Lista de la compra agrupada por secciones con casillas para marcar"></div>
+</div></section>
+
+<section class="feature alt"><div class="wrap grid">
+  <div class="text"><p class="eyebrow">Entreno</p><h2>Tus sesiones y tus kilos.</h2><p>Crea tus rutinas, apunta el peso de cada ejercicio y recuerda cuánto levantaste la última vez. También el dolor, de 0 a 10, para frenar a tiempo.</p></div>
+  <div class="shot"><div class="bar"><i></i><i></i><i></i></div><img loading="lazy" src="img/entreno.jpg" width="1770" height="1140" alt="Sesiones de gimnasio con sus ejercicios y series"></div>
+</div></section>
+
+<section class="feature"><div class="wrap center">
+  <p class="eyebrow">Privacidad</p><h2>Tus datos son tuyos.</h2>
+  <p>Todo se guarda en un archivo de tu ordenador. No hay cuenta, no hay servidor y nadie más ve lo que comes ni lo que entrenas.</p>
+  <div class="three">
+    <div class="tile"><h3>Sin cuenta</h3><p>Abres la app y empiezas. Nada de registros ni contraseñas.</p></div>
+    <div class="tile"><h3>Funciona sin internet</h3><p>Solo consulta el tiempo si le dices tu ciudad, y puedes no hacerlo.</p></div>
+    <div class="tile"><h3>Copias a tu manera</h3><p>Guarda una copia en un archivo y recupérala en otro ordenador.</p></div>
+  </div>
+</div></section>
+
+<section id="descargar" class="feature alt"><div class="wrap">
+  <h2>Descarga Rutina.</h2><p class="center" style="margin:0 auto;color:var(--muted);font-size:19px">Elige tu ordenador.</p>
+  <div class="dl">
+    <div class="tile" id="card-mac"><h3>Mac</h3><p>macOS 11 o posterior.</p>
+      <div class="row"><a class="pill" data-file="Rutina-mac-arm64.dmg" href="#">Apple Silicon (M1 o posterior)</a><a class="pill ghost" data-file="Rutina-mac-x64.dmg" href="#">Intel</a></div></div>
+    <div class="tile" id="card-win"><h3>Windows</h3><p>Windows 10 o posterior, 64 bits.</p>
+      <div class="row"><a class="pill" data-file="Rutina-win-x64.exe" href="#">Descargar para Windows</a></div></div>
+  </div>
+  <div class="how"><strong>La primera vez.</strong> Rutina todavía no está firmada por Apple ni por Microsoft, así que tu ordenador pedirá confirmación al abrirla. En Mac: clic derecho sobre la app, <em>Abrir</em> y confirma. En Windows: pulsa <em>Más información</em> y luego <em>Ejecutar de todos modos</em>.</div>
+</div></section>
+
+<section class="wrap faq">
+  <h2 class="center" style="margin-bottom:28px">Preguntas</h2>
+  <details><summary>¿Dónde se guardan mis datos?</summary><p>En un archivo dentro de la carpeta de datos de tu usuario, en tu propio ordenador. Rutina no los envía a ningún sitio.</p></details>
+  <details><summary>¿Necesito internet?</summary><p>No. Solo se conecta, si lo activas poniendo tu ciudad, para consultar el tiempo del día.</p></details>
+  <details><summary>¿Puedo pasar mis datos a otro ordenador?</summary><p>Sí. En Ajustes, <em>Guardar una copia</em> crea un archivo. En el otro ordenador, <em>Recuperar una copia</em> lo carga.</p></details>
+  <details><summary>¿Cómo creo mi menú y mis entrenos?</summary><p>Al empezar puedes cargar un plan de ejemplo y editarlo, o empezar en blanco. Tocas un plato para cambiarlo y añades tus ingredientes con sus calorías y proteína.</p></details>
+  <details><summary>¿Hay versión para móvil?</summary><p>Por ahora no. Rutina es para Mac y Windows.</p></details>
+</section>
+
+<footer><div class="wrap">Rutina · Mac y Windows</div></footer>
+
+<script>
+// Pon aquí la dirección donde publicas los instaladores (por ejemplo, la última versión en GitHub Releases).
+var DESCARGAS = 'https://github.com/charlymanso/rutina/releases/latest/download/';
+document.querySelectorAll('[data-file]').forEach(function (a) { a.href = DESCARGAS + a.dataset.file; });
+var ua = navigator.userAgent, esMac = /Mac/.test(navigator.platform || ua) && !/iPhone|iPad/.test(ua), esWin = /Win/.test(navigator.platform || ua);
+var main = document.getElementById('cta-main'), fine = document.getElementById('cta-fine');
+if (esMac) { main.textContent = 'Descargar para Mac'; main.href = '#descargar'; fine.textContent = 'macOS 11 o posterior · También para Windows'; }
+else if (esWin) { main.textContent = 'Descargar para Windows'; main.href = DESCARGAS + 'Rutina-win-x64.exe'; fine.textContent = 'Windows 10 o posterior · También para Mac'; }
+else { main.textContent = 'Ver descargas'; fine.textContent = 'Rutina es para ordenadores Mac y Windows'; }
+</script>
+</body>
+</html>
