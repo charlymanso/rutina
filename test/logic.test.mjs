@@ -117,7 +117,6 @@ d.dias['2026-10-20'] = { gym: { 'press-banca': { kg: 60 } } };
 d.dias['2026-10-27'] = { gym: { 'press-banca': { kg: 62.5 } } };
 assert.equal(L.ultimoPeso(d, 'press-banca', '2026-10-28').kg, 62.5);
 assert.equal(L.ultimoPeso(d, 'press-banca', '2026-10-27').kg, 60);
-assert.equal(L.semaforo(2), 'verde'); assert.equal(L.semaforo(4), 'ambar'); assert.equal(L.semaforo(7), 'rojo');
 
 // normalize tolera datos incompletos o corruptos
 const n = normalize({ perfil: { nombre: 'Ana' }, menu: { semanas: [[{ comida: { t: 'x', items: [] } }]] } });

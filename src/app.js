@@ -480,6 +480,20 @@ function slotEl(s, f, ahora, hecho) {
 function abrirEntrenoHoy(f) {
   const d = L.parseISO(f), cuerpo = h('div', { class: 'stack', style: 'gap:18px' });
   const guardar = (k, patch) => { setEj(f, k, patch); pintar(); };
+  // Series y repeticiones de hoy: se pueden cambiar solo para hoy o también en el plan
+  const editarSeries = (ses, e, k, x) => {
+    const actual = x.s || e.s, m = String(actual).match(/^\s*(\d+)\s*[×xX*]\s*(.+?)\s*$/);
+    const series = h('input', { type: 'number', id: 'ser-series', min: 1, max: 20, step: 1, inputmode: 'numeric', value: m ? m[1] : '' }), reps = h('input', { type: 'text', id: 'ser-reps', value: m ? m[2] : String(actual), placeholder: 'Ej. 8, 8-12 o 40 s' });
+    const plan = swt(false, () => { plan.setAttribute('aria-checked', String(plan.getAttribute('aria-checked') !== 'true')); }, 'Cambiar también en mi plan');
+    sheet({ title: e.n, save: 'Guardar', body: [h('div', { class: 'pair' }, field('Series', series), field('Repeticiones', reps)),
+      h('div', { class: 'row', style: 'padding:0;min-height:0' }, h('div', { class: 'grow' }, 'Cambiar también en mi plan', h('div', { class: 'sub' }, `Si no, solo cambia hoy. Plan actual: ${e.s}.`)), plan)],
+      onSave: () => {
+        const sr = parseInt(series.value, 10), rp = reps.value.trim(); if (!(sr >= 1)) return 'Escribe cuántas series.'; if (!rp) return 'Escribe las repeticiones.';
+        const nuevo = `${sr}×${rp}`;
+        if (plan.getAttribute('aria-checked') === 'true') { e.s = nuevo; guardar(k, { s: null }); commit(); toast('Cambiado en tu plan.'); } else guardar(k, { s: nuevo === e.s ? null : nuevo });
+      },
+      extra: x.s ? h('button', { class: 'btn danger', id: 'ser-volver', onclick: () => { guardar(k, { s: null }); sheets.slice(-1)[0].close(); } }, 'Volver al plan') : null });
+  };
   const fichas = (ses, reg) => ses.ej.map((e) => {
     const k = L.slug(e.n), x = reg[k] || {}, u = e.c ? L.ultimoPeso(data, k, f) : null;
     const kgActual = x.kg != null ? x.kg : (u ? u.kg : null), sugerido = x.kg == null && !!u;     // si hoy no has puesto nada, se recuerda el de la última vez
@@ -487,17 +501,15 @@ function abrirEntrenoHoy(f) {
     const kg = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off', id: 'kg-' + k, class: 'kg' + (sugerido ? ' sugerido' : ''), 'aria-label': 'Kilos de ' + e.n, placeholder: '—', value: kgActual != null ? L.kgTxt(kgActual) : '', onchange: (ev) => {
       const v = ev.target.value.trim(); if (v === '') return guardar(k, { kg: null });
       const n = num(v, NaN); if (!Number.isFinite(n) || n < 0 || n > 999) return toast('Escribe los kilos como número, por ejemplo 82,5.'); guardar(k, { kg: Math.round(n * 100) / 100 }); } });
-    const dolor = h('select', { id: 'dolor-' + k, 'aria-label': 'Dolor de 0 a 10', class: L.semaforo(x.dolor), value: x.dolor == null ? '' : String(x.dolor), onchange: (ev) => {
-      const v = ev.target.value === '' ? null : +ev.target.value; if (v != null && v >= 5) toast('Dolor de 5 o más: para ese ejercicio y cámbialo.'); guardar(k, { dolor: v }); } },
-      h('option', { value: '' }, '–'), Array.from({ length: 11 }, (_, n) => h('option', { value: String(n) }, String(n))));
     return h('div', { class: 'ficha' + (x.hecho ? ' hecho' : ''), id: 'ficha-' + k },
       h('div', { class: 'ficha-top' },
         h('button', { class: 'chk', id: 'hecho-' + k, 'aria-pressed': String(!!x.hecho), 'aria-label': (x.hecho ? 'Desmarcar ' : 'Marcar como hecho: ') + e.n,
           onclick: () => guardar(k, { hecho: !x.hecho, ...(!x.hecho && x.kg == null && u ? { kg: u.kg } : {}) }) }, icon('check')),   // al marcarlo se guarda el peso recordado
-        h('div', { class: 'grow' }, h('div', { class: 'ficha-nombre' }, e.n), h('div', { class: 'mute num' }, e.s))),
+        h('div', { class: 'grow' }, h('div', { class: 'ficha-nombre' }, e.n),
+          h('button', { type: 'button', class: 'esquema', id: 'esq-' + k, 'aria-label': `Cambiar series y repeticiones de ${e.n}`, onclick: () => editarSeries(ses, e, k, x) }, h('span', { class: 'num' }, x.s || e.s), x.s ? h('span', { class: 'mute small' }, ` · plan ${e.s}`) : null, h('span', { class: 'chev' }, ' ›')))),
       h('div', { class: 'ficha-campos' },
         e.c ? h('div', { class: 'campo' }, h('span', { class: 'label' }, 'Peso'), h('div', { class: 'kgbox' }, h('button', { type: 'button', class: 'mas', 'aria-label': 'Quitar 2,5 kg', onclick: () => mover(-2.5) }, '−'), kg, h('span', { class: 'kgu' }, 'kg'), h('button', { type: 'button', class: 'mas', 'aria-label': 'Sumar 2,5 kg', onclick: () => mover(2.5) }, '+'))) : null,
-        h('div', { class: 'campo' }, h('span', { class: 'label' }, 'Dolor'), dolor)),
+        ),
       u ? h('div', { class: 'mute small' }, `${sugerido ? 'Peso de la última vez' : 'Última vez'}: ${L.kgTxt(u.kg)} kg · ${L.fechaCorta(L.parseISO(u.f))}`) : null);
   });
   function pintar() {

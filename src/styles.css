@@ -316,8 +316,6 @@ button{-webkit-user-select:none;user-select:none}
 .kgbox .kg.sugerido{color:var(--muted);font-weight:500}
 .kgbox .kgu{color:var(--muted);font-weight:500;margin-left:-2px;margin-right:4px}
 .kgbox .mas{width:42px;height:42px;border-radius:12px;background:var(--fill);font-size:22px;font-weight:600;color:var(--accent)}
-.ficha select{width:auto;min-width:4.5rem;min-height:44px;font-size:18px;padding:6px 30px 6px 14px}
-.ficha select.verde{background-color:rgba(47,179,68,.2)}.ficha select.ambar{background-color:rgba(224,134,0,.22)}.ficha select.rojo{background-color:rgba(229,55,43,.22);color:var(--red)}
 /* ---------- Hoy, en medio y más grande ---------- */
 .nav .ico{display:inline-flex}
 .nav.principal{font-size:17px;font-weight:700;padding:12px 12px}
@@ -334,3 +332,5 @@ button{-webkit-user-select:none;user-select:none}
   .grande-titulo{font-size:26px}
   .ficha{padding:14px 12px}
 }
+.esquema{display:inline-flex;align-items:baseline;gap:2px;font-size:15px;font-weight:600;color:var(--accent);padding:2px 0;text-align:left}
+.esquema .chev{font-size:16px;color:var(--accent)}

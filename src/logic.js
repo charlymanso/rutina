@@ -157,7 +157,6 @@ export function ultimoPeso(data, k, antesDe) {
   }
   return best;
 }
-export const semaforo = (n) => (n == null ? '' : n <= 3 ? 'verde' : n === 4 ? 'ambar' : 'rojo');
 export function racha(data, d = hoy()) {
   const total = comidasDelDia(data).length, hechas = (x) => comidasDelDia(data).filter((c) => hechosDe(data, iso(x))[c]).length;
   let n = 0, r = d;
