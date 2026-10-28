@@ -123,7 +123,7 @@ function buscarAlimento({ titulo = 'Añadir alimento', onPick }) {
     if (t.length >= 3) {
       let cuerpo;
       if (online.estado === 'cargando') cuerpo = h('p', { class: 'mute small', style: 'padding-left:4px' }, 'Buscando productos…');
-      else if (online.estado === 'noapp') cuerpo = h('p', { class: 'mute small', style: 'padding-left:4px' }, 'La búsqueda de productos de marca está disponible en la app de escritorio.');
+      else if (online.estado === 'noapp') cuerpo = h('p', { class: 'mute small', style: 'padding-left:4px' }, 'La búsqueda de productos de marca solo está en la app de escritorio. Aquí puedes usar la base incluida o escribir el código de barras.');
       else if (online.estado === 'error') cuerpo = h('p', { class: 'mute small', style: 'padding-left:4px' }, 'No se pudo consultar la base online. Revisa tu conexión; puedes usar tus ingredientes y la base incluida.');
       else if (online.estado === 'ok') cuerpo = online.items.length ? h('div', { class: 'group' }, online.items.map(fila)) : h('p', { class: 'mute small', style: 'padding-left:4px' }, esCodigoDeBarras(t) ? 'No hay ningún producto con ese código.' : 'Sin resultados de productos.');
       if (cuerpo) out.push(seccion('Productos de supermercado', cuerpo, h('p', { class: 'mute', style: 'font-size:12px;padding-left:4px' }, 'Datos de Open Food Facts, aportados por usuarios. Pueden contener errores.')));
@@ -166,7 +166,7 @@ function itemsEditor(items, onChange = () => {}) {
 
 /* ---------- calculadora de objetivo ---------- */
 function abrirObjetivo({ onApply = null, guardar = true } = {}) {
-  const c0 = data.perfil.cuerpo || {}, entrenos = data.entreno.sesiones.length;
+  const c0 = data.perfil.cuerpo || {}, entrenos = L.diasEntrenoSemana(data);
   const st = { sexo: c0.sexo || 'h', edad: c0.edad || '', peso: c0.peso || '', altura: c0.altura || '', actividad: c0.actividad || 1.55, meta: c0.meta || 'man' };
   const res = h('div', { class: 'stack', id: 'obj-resultado', style: 'gap:12px' });
   const num0 = (id, ph, clave) => h('input', { id, type: 'number', inputmode: 'decimal', step: 'any', placeholder: ph, value: st[clave] === '' ? '' : String(st[clave]), oninput: (e) => { st[clave] = e.target.value; pintar(); } });
@@ -191,7 +191,7 @@ function abrirObjetivo({ onApply = null, guardar = true } = {}) {
   }
   pintarSexo();
   sheet({ title: 'Calcular mi objetivo', save: 'Usar estos objetivos', body: [field('Sexo', sexo), h('div', { class: 'pair' }, field('Edad (años)', num0('obj-edad', '30', 'edad')), field('Altura (cm)', num0('obj-altura', '175', 'altura'))), field('Peso (kg)', num0('obj-peso', '70', 'peso')),
-    field('Actividad', actividad), field('Objetivo', meta), entrenos ? h('p', { class: 'mute small' }, `Tienes ${entrenos} ${entrenos === 1 ? 'sesión' : 'sesiones'} de entreno a la semana: esos días comes algo más y los de descanso algo menos, y la media semanal es tu objetivo.`) : null, res],
+    field('Actividad', actividad), field('Objetivo', meta), entrenos ? h('p', { class: 'mute small' }, `Entrenas ${entrenos} ${entrenos === 1 ? 'día' : 'días'} a la semana: esos días comes algo más y los de descanso algo menos, y la media semanal es tu objetivo.`) : null, res],
     onSave: () => {
       const r = calcularObjetivo({ ...st, entrenos }); if (r.error) return r.error;
       if (guardar) { data.perfil.cuerpo = { ...st }; data.perfil.objetivos = { gym: { kcal: r.gym, prot: r.prot }, sin: { kcal: r.sin, prot: r.prot } }; commit(); toast('Objetivos actualizados.'); }
@@ -222,7 +222,7 @@ function recomendarMenu(lun, semana) {
   }
   const dieta = h('select', { id: 'rec-dieta', onchange: (e) => { opc.dieta = e.target.value; pintar(); } }, DIETAS.map(([v, t]) => h('option', { value: v }, t)));
   const chips = h('div', { class: 'chips' }, EXCLUSIONES.map(([v, t]) => { const b = h('button', { type: 'button', class: 'chipopt', id: 'rec-ex-' + v, 'aria-pressed': 'false', onclick: () => { opc.excluir.has(v) ? opc.excluir.delete(v) : opc.excluir.add(v); b.setAttribute('aria-pressed', String(opc.excluir.has(v))); pintar(); } }, t); return b; }));
-  const sh = sheet({ title: 'Recomendar menú', save: 'Usar este menú', body: [
+  const sh = sheet({ title: 'Recomendar menú', save: 'Usar menú', body: [
     h('p', { class: 'mute small' }, 'Propongo una comida y una cena para cada día, con cantidades ajustadas a tus objetivos y a lo que ya comes en el desayuno y la media mañana.'),
     field('Tipo de alimentación', dieta), h('div', {}, h('div', { class: 'label', style: 'margin-bottom:6px' }, 'Evitar'), chips), lista, nota,
     h('button', { class: 'btn plain', style: 'align-self:flex-start;padding-left:0', id: 'rec-calc', onclick: () => abrirObjetivo({ onApply: () => pintar() }) }, '¿No sabes cuántas calorías necesitas? Calcúlalas')],
@@ -306,11 +306,19 @@ function editFijo(clave, nombre) {
     onSave: () => { data.menu.fijos[clave] = { ...f, texto: texto.value.trim() || nombre, hora: hora.value || f.hora, items: f.items.filter((it) => it[1] > 0 && data.ingredientes[it[0]]) }; commit(); } });
 }
 
-function editSesion(dia) {
-  const orig = dia != null ? L.sesionGym(data, dia) : null;
-  const s = orig ? clone(orig) : { dia: Array.from({ length: 7 }, (_, i) => i).find((i) => !L.sesionGym(data, i)) ?? 0, t: '', min: '60 min', ej: [] };
-  const dsel = h('select', { value: String(s.dia) }, L.DIAS.map((d, i) => h('option', { value: String(i) }, d)));
+function editSesion(id) {
+  const orig = id ? L.sesionPorId(data, id) : null;
+  const s = orig ? clone(orig) : { id: L.idSesionNueva(data), dias: [], t: '', min: '60 min', ej: [] };
+  if (!orig) { const libre = [0, 2, 4, 1, 3, 5, 6].find((i) => !L.sesionGym(data, i)); if (libre != null) s.dias = [libre]; }
   const t = h('input', { type: 'text', value: s.t, placeholder: 'Ej. Pierna y core' }), min = h('input', { type: 'text', value: s.min });
+  const dias = h('div', { class: 'chips', role: 'group', 'aria-label': 'Días de la semana', id: 'ses-dias' }), aviso = h('p', { class: 'mute small', id: 'ses-aviso' });
+  function pintarDias() {
+    dias.replaceChildren(...L.DIAS.map((nombre, i) => { const on = s.dias.includes(i);
+      return h('button', { type: 'button', class: 'chipopt', id: 'ses-dia-' + i, 'aria-pressed': String(on), 'aria-label': nombre, onclick: () => { s.dias = on ? s.dias.filter((x) => x !== i) : [...s.dias, i].sort(); pintarDias(); } }, nombre.slice(0, 3)); }));
+    const choques = s.dias.map((i) => ({ i, otra: L.sesionGym(data, i) })).filter((x) => x.otra && x.otra.id !== s.id);
+    aviso.textContent = !s.dias.length ? 'Sin días fijos: la sesión no se programa sola, pero podrás usarla cuando quieras desde Hoy.'
+      : choques.length ? `Esos días pasarán a esta sesión: ${choques.map((x) => `${L.DIAS[x.i].toLowerCase()} (antes “${x.otra.t}”)`).join(', ')}.` : `Se repite ${L.diasTexto(s.dias).toLowerCase()}.`;
+  }
   const lista = h('div', { class: 'stack', style: 'gap:10px' });
   function draw() {
     lista.replaceChildren(...s.ej.map((e, i) => h('div', { class: 'exrow' },
@@ -320,15 +328,34 @@ function editSesion(dia) {
       h('button', { class: 'x', style: 'color:var(--faint);font-size:20px', 'aria-label': 'Quitar', onclick: () => { s.ej.splice(i, 1); draw(); } }, '×'))),
       h('button', { class: 'btn sec', style: 'align-self:flex-start', onclick: () => { s.ej.push({ n: '', s: '3×10', c: true }); draw(); } }, '+ Ejercicio'));
   }
-  draw();
-  sheet({ title: orig ? 'Editar sesión' : 'Nueva sesión', body: [field('Día', dsel), field('Nombre', t), field('Duración', min), h('div', { class: 'label' }, 'Ejercicios'), lista],
+  draw(); pintarDias();
+  sheet({ title: orig ? 'Editar sesión' : 'Nueva sesión', body: [field('Nombre', t), h('div', {}, h('div', { class: 'label', style: 'margin-bottom:6px' }, 'Días en que la haces'), dias, aviso), field('Duración', min), h('div', { class: 'label' }, 'Ejercicios'), lista],
     onSave: () => {
-      const d = +dsel.value; if (!t.value.trim()) return 'Escribe el nombre de la sesión.';
-      if (L.sesionGym(data, d) && d !== dia) return `Ya tienes una sesión el ${L.DIAS[d].toLowerCase()}.`;
-      const nueva = { dia: d, t: t.value.trim(), min: min.value.trim(), ej: s.ej.filter((e) => e.n.trim()).map((e) => ({ n: e.n.trim(), s: e.s.trim(), c: !!e.c })) };
-      data.entreno.sesiones = data.entreno.sesiones.filter((x) => x.dia !== dia && x.dia !== d).concat(nueva).sort((a, b) => a.dia - b.dia); commit();
+      if (!t.value.trim()) return 'Escribe el nombre de la sesión.';
+      const nueva = { id: s.id, dias: [...s.dias].sort(), t: t.value.trim(), min: min.value.trim(), ej: s.ej.filter((e) => e.n.trim()).map((e) => ({ n: e.n.trim(), s: e.s.trim(), c: !!e.c })) };
+      const otras = data.entreno.sesiones.filter((x) => x.id !== s.id).map((x) => ({ ...x, dias: (x.dias || []).filter((d) => !nueva.dias.includes(d)) }));   // un día solo puede tener una sesión
+      const primero = (x) => (x.dias.length ? Math.min(...x.dias) : 9);
+      data.entreno.sesiones = [...otras, nueva].sort((a, b) => primero(a) - primero(b)); commit();
     },
-    extra: orig ? h('button', { class: 'btn danger', onclick: () => confirmSheet('¿Borrar sesión?', `Se eliminará “${orig.t}”. Tus kilos anotados se conservan.`, 'Borrar', () => { data.entreno.sesiones = data.entreno.sesiones.filter((x) => x.dia !== dia); commit(); sheets.slice().forEach((x) => x.close()); }) }, 'Borrar') : null });
+    extra: orig ? h('div', { class: 'row', style: 'padding:0;gap:4px' }, h('button', { class: 'btn danger', onclick: () => confirmSheet('¿Borrar sesión?', `Se eliminará “${orig.t}”. Tus kilos anotados se conservan.`, 'Borrar', () => { data.entreno.sesiones = data.entreno.sesiones.filter((x) => x.id !== s.id); commit(); sheets.slice().forEach((x) => x.close()); }) }, 'Borrar'),
+      h('button', { class: 'btn plain', onclick: () => { const c = clone(orig); c.id = L.idSesionNueva(data); c.dias = []; c.t = `${orig.t} (copia)`; data.entreno.sesiones.push(c); commit(); sheets.slice().forEach((x) => x.close()); toast('Sesión duplicada. Cámbiale el nombre y los días.'); } }, 'Duplicar')) : null });
+}
+
+/* Cambiar el entreno de un día concreto sin tocar tu plan semanal */
+function cambiarEntrenoDia(f) {
+  const d = L.parseISO(f), actual = L.sesionDelDia(data, d), plan = L.sesionGym(data, L.idxDia(d)), cambiado = L.hayCambioDeEntreno(data, d);
+  const poner = (valor) => { const dr = diaReg(f); if ((valor === 'descanso' && !plan) || (valor && plan && valor === plan.id)) delete dr.entreno; else dr.entreno = valor; sh.close(); commit(); toast(valor === 'descanso' ? 'Hoy toca descanso.' : 'Entreno cambiado.'); };
+  const fila = (id, titulo, sub, activa) => h('button', { class: 'row tap', type: 'button', id: 'cambiar-' + id, 'aria-pressed': String(activa), onclick: () => poner(id) }, h('div', { class: 'grow' }, titulo, sub ? h('div', { class: 'sub' }, sub) : null), h('span', { class: 'chev', style: 'color:var(--accent);font-weight:700' }, activa ? '✓' : ''));
+  const sh = sheet({ title: 'Entreno de hoy', body: [
+    h('p', { class: 'mute small' }, `Elige qué haces hoy. Solo cambia este día${plan ? `; tu plan sigue siendo “${plan.t}” los ${L.DIAS[L.idxDia(d)].toLowerCase()}s` : ''}. Tu objetivo de calorías de hoy se ajusta.`),
+    h('div', { class: 'group' }, [...data.entreno.sesiones.map((x) => fila(x.id, x.t, `${L.diasTexto(x.dias, true)}${x.min ? ' · ' + x.min : ''}`, actual && actual.id === x.id)), fila('descanso', 'Descanso', 'Sin entreno hoy', !actual)]),
+    cambiado ? h('button', { class: 'btn plain', id: 'cambiar-volver', style: 'align-self:flex-start;padding-left:0', onclick: () => { delete diaReg(f).entreno; sh.close(); commit(); toast('Vuelves a tu plan.'); } }, 'Volver a mi plan') : null] });
+}
+function barraEntreno(d, f) {
+  if (!data.entreno.sesiones.length) return null;
+  const ses = L.sesionDelDia(data, d), cambiado = L.hayCambioDeEntreno(data, d);
+  return h('div', { class: 'row', style: 'padding:0 4px;min-height:0' }, h('div', { class: 'grow small mute', id: 'entreno-hoy' }, ses ? `Entreno de hoy: ${ses.t}` : 'Hoy toca descanso', cambiado ? ' · cambiado' : ''),
+    h('button', { class: 'btn plain', id: 'cambiar-entreno', onclick: () => cambiarEntrenoDia(f) }, ses ? 'Cambiar entreno' : 'Entrenar hoy'));
 }
 
 function addAgenda(f) {
@@ -338,6 +365,7 @@ function addAgenda(f) {
 }
 
 function bienvenida() {
+  if (S.bienvenida && sheets.includes(S.bienvenida)) return;   // ya está abierta
   const T = makeTemplate();
   const nombre = h('input', { type: 'text', placeholder: 'Tu nombre' }), ciudad = h('input', { type: 'text', placeholder: 'Para ver el tiempo (opcional)' });
   const kcal = h('input', { type: 'number', value: String(T.perfil.objetivos.gym.kcal) }), prot = h('input', { type: 'number', value: String(T.perfil.objetivos.gym.prot) });
@@ -444,9 +472,19 @@ function saludo() {
   const hr = new Date().getHours(), t = hr < 6 ? 'Buenas noches' : hr < 14 ? 'Buenos días' : hr < 21 ? 'Buenas tardes' : 'Buenas noches';
   return data.perfil.nombre ? `${t}, ${data.perfil.nombre}` : t;
 }
+function avisoInstalar() {
+  if (window.rutina || localStorage.getItem('rutina-ocultar-instalar')) return null;
+  const instalada = window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches; if (instalada) return null;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (!ios && !S.instalarEvento) return null;
+  const ocultar = h('button', { class: 'btn plain', 'aria-label': 'Ocultar este aviso', onclick: () => { try { localStorage.setItem('rutina-ocultar-instalar', '1'); } catch { /* sin almacenamiento */ } S.instalarOculto = true; render(); } }, '✕');
+  if (S.instalarOculto) return null;
+  return ios ? h('div', { class: 'banner', id: 'aviso-instalar', role: 'note' }, h('span', { class: 'grow' }, 'Instala Rutina: toca ', h('b', {}, 'Compartir'), ' (el cuadrado con la flecha) y elige ', h('b', {}, '«Añadir a pantalla de inicio»'), '.'), ocultar)
+    : h('div', { class: 'banner', id: 'aviso-instalar', role: 'note' }, h('span', { class: 'grow' }, 'Instala Rutina en tu dispositivo para usarla como una app.'), h('button', { class: 'btn', onclick: async () => { S.instalarEvento.prompt(); await S.instalarEvento.userChoice; S.instalarEvento = null; render(); } }, 'Instalar'), ocultar);
+}
 function recordatorioCuenta() {
   if (!Nube.nubeActiva() || Nube.haySesion() || (data.meta || {}).ocultarCuenta) return null;
-  return h('div', { class: 'banner', role: 'note' }, h('span', { class: 'grow' }, 'Crea una cuenta para no perder tus datos y usar Rutina en otro ordenador.'),
+  return h('div', { class: 'banner', role: 'note' }, h('span', { class: 'grow' }, 'Crea una cuenta para no perder tus datos y usar Rutina en otros dispositivos.'),
     h('button', { class: 'btn', onclick: () => irAuth('crear') }, 'Crear cuenta'),
     h('button', { class: 'btn plain', 'aria-label': 'Ocultar este aviso', onclick: () => { data.meta = data.meta || {}; data.meta.ocultarCuenta = true; guardarLocal(); } }, '✕'));
 }
@@ -456,7 +494,7 @@ function viewHoy() {
   for (const [m, nombre] of [['comida', 'Comida'], ['cena', 'Cena']]) {
     const pl = dm && dm[m]; if (pl) slots.push({ k: m, hora: data.menu.horas[m], kind: nombre, title: pl.libre ? 'Comida libre' : pl.t, det: pl.libre ? 'Que lleve una ración clara de proteína.' : itemsText(pl.items) });
   }
-  const ses = L.sesionGym(data, L.idxDia(d));
+  const ses = L.sesionDelDia(data, d);
   if (ses) slots.push({ k: 'gym', hora: data.entreno.hora, kind: `Entreno${ses.min ? ' · ' + ses.min : ''}`, title: ses.t, extra: bloqueGym(ses, f) });
   slots.sort((a, b) => L.minutos(a.hora) - L.minutos(b.hora));
   const now = new Date(), nm = now.getHours() * 60 + now.getMinutes(), sig = slots.find((s) => !hechos[s.k] && L.minutos(s.hora) >= nm - 60), hechas = slots.filter((s) => hechos[s.k]).length;
@@ -471,10 +509,10 @@ function viewHoy() {
 
   return h('div', { class: 'page' },
     h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, saludo()), h('p', { class: 'subtitle' }, L.fechaLarga(d)))),
-    recordatorioCuenta(),
+    avisoInstalar(), recordatorioCuenta(),
     h('div', { class: 'cols' },
       h('div', { class: 'stack' }, slots.length ? h('div', { class: 'group' }, slots.map((s) => slotEl(s, f, sig && sig.k, !!hechos[s.k]))) :
-        h('div', { class: 'card empty' }, h('p', {}, 'Hoy no tienes nada en el plan.'), h('button', { class: 'btn', onclick: () => go('semana') }, 'Preparar el menú')), extrasCard(f)),
+        h('div', { class: 'card empty' }, h('p', {}, 'Hoy no tienes nada en el plan.'), h('button', { class: 'btn', onclick: () => go('semana') }, 'Preparar el menú')), barraEntreno(d, f), extrasCard(f)),
       h('div', { class: 'stack' }, resumenCard(f),
         t ? h('section', { class: 'card' }, h('h2', { class: 'sec' }, 'Nutrición'), metric('Proteína', t.p, o.prot, 'g'), metric('Energía', t.k, o.kcal, 'kcal'), macroBar(t),
           h('p', { class: 'mute small' }, 'Estimación según lo planeado' + (t.extras ? ` más ${L.miles(t.extras)} kcal de extras` : '') + (t.libre ? `; cuenta unas ${L.miles(data.perfil.libre.kcal)} kcal por la comida libre.` : '.'))) : null,
@@ -503,7 +541,7 @@ function viewSemana() {
     h('p', { class: 'mute small' }, 'Toca un plato para editarlo. Las cantidades son por persona. Las calorías se actualizan al cambiar los ingredientes.'),
     h('div', { class: 'group' }, dias.map(({ d, i, t, o }) => {
       const pct = t && o.kcal ? Math.min(100, t.k / o.kcal * 100) : 0, pasa = t && o.kcal && t.k > o.kcal * 1.1;
-      return h('div', { class: 'dayrow' + (L.iso(d) === fh ? ' hoy' : '') }, h('div', { class: 'dn' }, L.DIAS[i], h('small', {}, L.fechaCorta(d) + (L.sesionGym(data, i) ? ' · con entreno' : '')),
+      return h('div', { class: 'dayrow' + (L.iso(d) === fh ? ' hoy' : '') }, h('div', { class: 'dn' }, L.DIAS[i], h('small', {}, L.fechaCorta(d) + (L.esDiaGym(data, d) ? ' · con entreno' : '')),
         t && t.k > 0 ? h('div', { class: 'dtot num' }, h('span', { class: pasa ? 'over' : '' }, `${L.miles(t.k)} kcal`), h('span', { class: 'mute' }, ` · P ${L.miles(t.p)} g`), h('div', { class: 'bar' + (pasa ? ' warn' : '') }, h('i', { style: `width:${pct}%` }))) : null),
         platoBtn(semana, i, 'comida'), platoBtn(semana, i, 'cena')); })));
 }
@@ -531,14 +569,14 @@ function viewCompra() {
 }
 
 function viewEntreno() {
-  const ses = data.entreno.sesiones;
+  const ses = data.entreno.sesiones, dias = L.diasEntrenoSemana(data);
   return h('div', { class: 'page' },
-    h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, 'Entreno'), h('p', { class: 'subtitle' }, ses.length ? `${ses.length} ${ses.length === 1 ? 'sesión' : 'sesiones'} a la semana` : 'Aún no has creado sesiones')), h('button', { class: 'btn', onclick: () => editSesion(null) }, 'Nueva sesión')),
+    h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, 'Entreno'), h('p', { class: 'subtitle' }, ses.length ? `${ses.length} ${ses.length === 1 ? 'sesión' : 'sesiones'} · ${dias} ${dias === 1 ? 'día' : 'días'} a la semana` : 'Aún no has creado sesiones')), h('button', { class: 'btn', id: 'nueva-sesion', onclick: () => editSesion(null) }, 'Nueva sesión')),
     ses.length ? ses.map((s) => h('section', { class: 'card' },
-      h('div', { class: 'row', style: 'padding:0;min-height:0' }, h('div', { class: 'grow' }, h('div', { class: 'label' }, `${L.DIAS[s.dia]}${s.min ? ' · ' + s.min : ''}`), h('h2', { class: 'sec' }, s.t)), h('button', { class: 'btn sec', onclick: () => editSesion(s.dia) }, 'Editar')),
+      h('div', { class: 'row', style: 'padding:0;min-height:0' }, h('div', { class: 'grow' }, h('div', { class: 'label' }, `${L.diasTexto(s.dias)}${s.min ? ' · ' + s.min : ''}`), h('h2', { class: 'sec' }, s.t)), h('button', { class: 'btn sec', onclick: () => editSesion(s.id) }, 'Editar')),
       h('div', { class: 'group', style: 'box-shadow:none;background:var(--bg)' }, s.ej.map((e) => { const u = e.c ? L.ultimoPeso(data, L.slug(e.n)) : null;
         return h('div', { class: 'row', style: 'min-height:42px' }, h('span', { class: 'grow' }, e.n), h('span', { class: 'mute num small' }, e.s + (u ? ` · ${L.kgTxt(u.kg)} kg` : ''))); })))) :
-      h('div', { class: 'card empty' }, h('p', {}, 'Crea tus sesiones de gimnasio y aparecerán en Hoy el día que toquen.'), h('button', { class: 'btn', onclick: () => editSesion(null) }, 'Crear la primera')));
+      h('div', { class: 'card empty' }, h('p', {}, 'Crea tus sesiones de gimnasio y aparecerán en Hoy los días que toquen.'), h('button', { class: 'btn', onclick: () => editSesion(null) }, 'Crear la primera')));
 }
 
 function viewAjustes() {
@@ -565,7 +603,7 @@ function viewAjustes() {
       data.menu.semanas.length > 1 ? tapRow('Empezar el ciclo esta semana', 'La semana actual pasa a ser la 1.', () => { data.menu.ancla = L.iso(L.lunesDe(L.hoy())); commit(); toast('Ciclo reiniciado.'); }) : null),
     h('section', { class: 'stack', style: 'gap:8px' }, h('div', { class: 'row', style: 'padding:0 4px' }, h('div', { class: 'label grow' }, `Ingredientes · ${ings.length}`), h('button', { class: 'btn plain', onclick: () => editIngrediente(null) }, '+ Añadir')),
       ings.length ? h('div', { class: 'group' }, ings.map(([id, g]) => tapRow(g.n, macroPor100(g), () => editIngrediente(id)))) : h('p', { class: 'mute small' }, 'Aún no hay ingredientes.')),
-    grupo('Acerca de Rutina', rowOf('Versión', h('span', { class: 'mute num' }, S.version || '—')),
+    grupo('Acerca de Rutina', rowOf('Versión', h('span', { class: 'mute num' }, S.version || 'Web')),
       h('a', { class: 'row tap', href: 'https://charlymanso.github.io/rutina/', target: '_blank', rel: 'noopener' }, h('div', { class: 'grow' }, 'Sitio web'), h('span', { class: 'chev' }, '›')),
       h('a', { class: 'row tap', href: 'https://charlymanso.github.io/rutina/privacidad.html', target: '_blank', rel: 'noopener' }, h('div', { class: 'grow' }, 'Política de privacidad'), h('span', { class: 'chev' }, '›'))),
     grupo('Datos', tapRow('Guardar una copia', 'Exporta todo a un archivo.', async () => { if (await store.exportar(data)) toast('Copia guardada.'); }),
@@ -617,6 +655,7 @@ function viewInicio() {
 
 /* ---------- aviso de actualización ---------- */
 function bannerUpdate() {
+  if (S.swNueva) return h('div', { class: 'banner', role: 'status' }, h('span', { class: 'grow' }, 'Hay una versión nueva de Rutina.'), h('button', { class: 'btn', id: 'sw-actualizar', onclick: () => S.swNueva.postMessage('ACTUALIZAR') }, 'Actualizar'));
   const u = S.upd; // actualización automática (Windows)
   if (u && u.fase === 'descargando') return h('div', { class: 'banner', role: 'status' }, h('span', { class: 'grow' }, `Descargando la versión nueva${u.porcentaje != null ? ` (${u.porcentaje} %)` : ''}…`));
   if (u && u.fase === 'listo') return h('div', { class: 'banner', role: 'status' }, h('span', { class: 'grow' }, `La versión ${u.version} está lista.`),
@@ -684,7 +723,7 @@ function viewAuth() {
   let enviar, cuerpo, pie, titulo, sub, atras = () => cerrarAuth();
 
   if (p === 'entrar') {
-    titulo = 'Entrar'; sub = 'Con tu cuenta, tu plan te acompaña en todos tus ordenadores.';
+    titulo = 'Entrar'; sub = 'Con tu cuenta, tu plan te acompaña en todos tus dispositivos.';
     enviar = () => run(async () => { const c = mail(); if (!f.clave) throw new Error('Escribe tu contraseña.'); await Nube.entrar(c, f.clave); f.clave = ''; await trasEntrar(); });
     cuerpo = [campo('auth-correo', 'Correo electrónico', 'correo', 'correo', 'email'), campo('auth-clave', 'Contraseña', 'clave', 'clave', 'current-password'),
       h('button', { class: 'link', id: 'auth-olvido', type: 'button', onclick: () => { S.auth = 'recuperar'; S.authMsg = ''; render(); } }, '¿Has olvidado tu contraseña?'),
@@ -761,7 +800,7 @@ document.addEventListener('keydown', (e) => {
 (async () => {
   const raw = await store.load();
   data = normalize(raw);
-  if (Nube.nubeActiva()) await Nube.cargarSesion();
+  if (Nube.nubeActiva()) { await Nube.cargarSesion(); try { if (await Nube.completarGoogleWeb()) S.vuelveDeGoogle = true; } catch (e) { S.errorInicio = e.message; } }
   if (raw && raw.menu && !raw.perfil) data.perfil.listo = true;
   if (window.rutina && window.rutina.version) window.rutina.version().then((v) => { S.version = v; });
   render();
@@ -771,7 +810,8 @@ document.addEventListener('keydown', (e) => {
     Sync.init({ getData: () => data, setData: (d) => { data = d; if (S.bienvenida) { S.bienvenida.close(); S.bienvenida = null; } }, guardar: () => store.save(data), render, onConflicto: conflictoSheet,
       onEstado: (e) => { S.nube = { ...(S.nube || {}), ...e }; const el = document.getElementById('estado-nube'); if (el) el.textContent = textoEstado(); },
       onSesionCaducada: () => { S.nube = null; render(); toast('Tu sesión ha caducado. Vuelve a entrar en Ajustes.'); } });
-    if (await Nube.cargarSesion()) Sync.sincronizar();
+    if (S.errorInicio) toast(S.errorInicio);
+    if (S.vuelveDeGoogle) trasEntrar(); else if (Nube.haySesion()) Sync.sincronizar();
     let ultimoFoco = 0;
     window.addEventListener('focus', () => { if (Date.now() - ultimoFoco > 30000) { ultimoFoco = Date.now(); Sync.sincronizar(); } });
     setInterval(Sync.sincronizar, 5 * 60 * 1000);
@@ -782,5 +822,16 @@ document.addEventListener('keydown', (e) => {
     window.rutina.onUpdate((e) => { S.upd = { ...(S.upd || {}), ...e }; render(); });
   }
   comprobar(); setInterval(comprobar, 6 * 3600 * 1000);
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); S.instalarEvento = e; if (S.tab === 'hoy') render(); });
+  if ('serviceWorker' in navigator && !window.rutina && /^https?:$/.test(location.protocol)) {   // modo sin conexión (web y móvil)
+    const teniaControl = !!navigator.serviceWorker.controller; let recargando = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (teniaControl && !recargando) { recargando = true; location.reload(); } });
+    navigator.serviceWorker.register('sw.js').then((reg) => {
+      const nueva = (w) => { if (w && navigator.serviceWorker.controller) { S.swNueva = w; render(); } };
+      if (reg.waiting) nueva(reg.waiting);
+      reg.addEventListener('updatefound', () => { const w = reg.installing; if (w) w.addEventListener('statechange', () => { if (w.state === 'installed') nueva(w); }); });
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+    }).catch(() => {});
+  }
   setInterval(() => { if (S.tab === 'hoy' && !document.hidden && !sheets.length && !/^(INPUT|SELECT|TEXTAREA)$/.test((document.activeElement || {}).tagName)) render(); }, 60000);
 })();

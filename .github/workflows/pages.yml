@@ -3,7 +3,7 @@ name: Publicar la web
 on:
   push:
     branches: [main]
-    paths: ['site/**', '.github/workflows/pages.yml']
+    paths: ['site/**', 'src/**', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 permissions: { contents: read, pages: write, id-token: write }
@@ -15,6 +15,12 @@ jobs:
     environment: { name: github-pages, url: '${{ steps.d.outputs.page_url }}' }
     steps:
       - uses: actions/checkout@v4
+      - name: Preparar la app web en /app/
+        run: |
+          mkdir -p site/app
+          cp -r src/. site/app/
+          rm -f site/app/package.json
+          sed -i "s/__BUILD__/${GITHUB_SHA::8}/" site/app/sw.js
       - uses: actions/upload-pages-artifact@v3
         with: { path: site }
       - id: d

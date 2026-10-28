@@ -248,3 +248,37 @@ a.row.tap{color:inherit;text-decoration:none}
 .chipopt{padding:7px 14px;border-radius:99px;background:var(--fill);font-size:14px;font-weight:500;transition:background .15s}
 .chipopt[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
 #rec-lista .row{padding:10px 14px}
+/* Los bloques dentro de una columna flexible nunca se comprimen: si no caben, la columna se desplaza */
+.sheet .body>*,.stack>*,.page>*,.card>*{flex-shrink:0}
+
+/* ---------- móvil: acabado de app ---------- */
+html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{overscroll-behavior:none;-webkit-touch-callout:none}
+button,.nav,.chk,.box{touch-action:manipulation}
+button{-webkit-user-select:none;user-select:none}
+@supports(height:100dvh){.app{height:100dvh}}
+@media(max-width:760px){
+  input,select,textarea{font-size:16px}                    /* evita el zoom automático de iOS al escribir */
+  .main{padding:16px max(16px,env(safe-area-inset-right)) 28px max(16px,env(safe-area-inset-left))}
+  .side{padding-left:max(6px,env(safe-area-inset-left));padding-right:max(6px,env(safe-area-inset-right))}
+  .nav{min-height:50px;font-size:11px;gap:3px}.nav svg{width:25px;height:25px}
+  .nav[aria-current=page]{font-weight:600}
+  .title{font-size:30px}h2.sec{font-size:20px}
+  .card{padding:16px;border-radius:18px}.group{border-radius:16px}
+  .slot{grid-template-columns:2.9rem minmax(0,1fr) auto;gap:0 10px;padding:14px}
+  .chk{width:34px;height:34px}.box{width:26px;height:26px}
+  .row{padding:12px 14px}.btn.plain{min-height:40px}
+  .banner{border-radius:16px}.banner .btn{white-space:nowrap}
+  .gate{padding:24px 20px max(24px,env(safe-area-inset-bottom))}
+  .auth .back{top:max(14px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left))}
+  /* los cuadros suben desde abajo, como en iOS */
+  .veil{align-items:flex-end;padding:0}
+  .sheet{width:100%;max-height:calc(100dvh - 20px);border-radius:22px 22px 0 0;animation:subir .28s cubic-bezier(.2,.8,.2,1)}
+  .sheet header{position:relative;padding-top:22px}
+  .sheet header::before{content:"";position:absolute;top:8px;left:50%;width:38px;height:5px;margin-left:-19px;border-radius:3px;background:var(--faint);opacity:.45}
+  .sheet .body{padding-bottom:max(18px,env(safe-area-inset-bottom))}
+  .sheet footer{padding-bottom:max(12px,env(safe-area-inset-bottom))}
+  .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+}
+@keyframes subir{from{transform:translateY(60px);opacity:.6}}
+@media(max-width:760px){.sheet header h3{font-size:15px;white-space:nowrap}.sheet header .btn{white-space:nowrap}}

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Rutina · Tu día, claro</title>
+<script>if (/[?&](code|error)=/.test(location.search)) location.replace('app/' + location.search);</script>
 <meta name="description" content="Rutina reúne tus comidas, tu lista de la compra y tus entrenos en una app para Mac y Windows. Tus datos se quedan en tu ordenador.">
 <link rel="icon" href="img/icon.png">
 <style>
@@ -100,6 +101,18 @@ footer{border-top:1px solid var(--line);padding:28px 0 44px;color:var(--muted);f
   </div>
 </div></section>
 
+<section class="feature" id="movil"><div class="wrap center">
+  <p class="eyebrow">En el móvil</p><h2>También en tu iPhone o Android.</h2>
+  <p>Abre Rutina en el navegador de tu móvil y añádela a la pantalla de inicio: se instala como una app, funciona sin conexión y se actualiza sola. Entra con tu cuenta y tendrás el mismo plan que en el ordenador.</p>
+  <div class="three">
+    <div class="tile"><h3>iPhone</h3><p>Abre Rutina en <strong>Safari</strong>, toca <strong>Compartir</strong> y elige <strong>«Añadir a pantalla de inicio»</strong>.</p></div>
+    <div class="tile"><h3>Android</h3><p>Abre Rutina en <strong>Chrome</strong>, pulsa el menú ⋮ y elige <strong>«Instalar aplicación»</strong>.</p></div>
+    <div class="tile"><h3>Con tu cuenta</h3><p>Entra con el mismo correo o con Google y tu plan aparece al momento.</p></div>
+  </div>
+  <div class="cta"><a class="pill" href="app/">Abrir Rutina en el navegador</a></div>
+  <p class="fine">En el móvil no está el buscador de productos de marca; sí la base incluida y el código de barras escrito.</p>
+</div></section>
+
 <section id="descargar" class="feature alt"><div class="wrap">
   <h2>Descarga Rutina.</h2><p class="center" style="margin:0 auto;color:var(--muted);font-size:19px">Elige tu ordenador.</p>
   <div class="dl">
@@ -117,7 +130,7 @@ footer{border-top:1px solid var(--line);padding:28px 0 44px;color:var(--muted);f
   <details><summary>¿Necesito internet?</summary><p>No. Solo se conecta, si lo activas poniendo tu ciudad, para consultar el tiempo del día.</p></details>
   <details><summary>¿Puedo pasar mis datos a otro ordenador?</summary><p>Sí. Lo más fácil es crear una cuenta en Ajustes y entrar con ella en el otro ordenador: tu plan se sincroniza solo. Sin cuenta, <em>Guardar una copia</em> crea un archivo que cargas con <em>Recuperar una copia</em>.</p></details>
   <details><summary>¿Cómo creo mi menú y mis entrenos?</summary><p>Al empezar puedes cargar un plan de ejemplo y editarlo, o empezar en blanco. Tocas un plato para cambiarlo y añades tus ingredientes con sus calorías y proteína.</p></details>
-  <details><summary>¿Hay versión para móvil?</summary><p>Por ahora no. Rutina es para Mac y Windows.</p></details>
+  <details><summary>¿Hay versión para móvil?</summary><p>Sí, como web instalable: abre <a href="app/">Rutina en el navegador</a> y añádela a la pantalla de inicio. No hay todavía una app en la App Store ni en Google Play.</p></details>
 </section>
 
 <footer><div class="wrap">Rutina · Mac y Windows · <a href="privacidad.html">Privacidad</a></div></footer>
@@ -130,7 +143,7 @@ var ua = navigator.userAgent, esMac = /Mac/.test(navigator.platform || ua) && !/
 var main = document.getElementById('cta-main'), fine = document.getElementById('cta-fine');
 if (esMac) { main.textContent = 'Descargar para Mac'; main.href = '#descargar'; fine.textContent = 'macOS 11 o posterior · También para Windows'; }
 else if (esWin) { main.textContent = 'Descargar para Windows'; main.href = DESCARGAS + 'Rutina-win-x64.exe'; fine.textContent = 'Windows 10 o posterior · También para Mac'; }
-else { main.textContent = 'Ver descargas'; fine.textContent = 'Rutina es para ordenadores Mac y Windows'; }
+else { main.textContent = 'Ver descargas'; fine.textContent = 'Rutina es para Mac y Windows, y también funciona en el móvil desde el navegador'; }
 </script>
 </body>
 </html>

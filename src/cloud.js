@@ -9,7 +9,9 @@ let sesion = null;
 
 export const haySesion = () => !!sesion;
 export const usuario = () => (sesion ? sesion.user : null);
-export const puedeGoogle = () => !!(NUBE.google && puente() && puente().oauth);
+const esWeb = () => !puente() && typeof location !== 'undefined' && /^https?:$/.test(location.protocol);
+export const puedeGoogle = () => !!(NUBE.google && ((puente() && puente().oauth) || esWeb()));
+const KEY_PKCE = 'rutina-pkce-v1';
 
 // ---- errores en lenguaje normal ----
 function amigable(status, j) {
@@ -79,9 +81,28 @@ const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replac
 export async function entrarConGoogle() {
   const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)));
   const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
-  const url = `${base()}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent('http://127.0.0.1:53682/callback')}&code_challenge=${challenge}&code_challenge_method=s256`;
-  const code = await puente().oauth(url);
-  await guardarSesion(aSesion(await api('/auth/v1/token?grant_type=pkce', { method: 'POST', body: { auth_code: code, code_verifier: verifier } })));
+  const enlace = (retorno) => `${base()}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(retorno)}&code_challenge=${challenge}&code_challenge_method=s256`;
+  if (puente() && puente().oauth) {
+    const code = await puente().oauth(enlace('http://127.0.0.1:53682/callback'));
+    await guardarSesion(aSesion(await api('/auth/v1/token?grant_type=pkce', { method: 'POST', body: { auth_code: code, code_verifier: verifier } })));
+    return;
+  }
+  // Web / móvil: se va a Google y vuelve con ?code=. Vuelve a la raíz del sitio (la dirección permitida en Supabase), que reenvía a la app.
+  try { localStorage.setItem(KEY_PKCE, verifier); } catch { throw new Error('Tu navegador bloquea el almacenamiento y no se puede iniciar sesión con Google.'); }
+  location.assign(enlace(new URL('../', location.href).href));
+  return new Promise(() => {}); // la página se va; no se resuelve
+}
+// Al volver de Google (solo web): canjea el código por la sesión. Devuelve true si inició sesión.
+export async function completarGoogleWeb() {
+  if (!esWeb() || !nubeActiva()) return false;
+  const q = new URLSearchParams(location.search), code = q.get('code'), err = q.get('error_description') || q.get('error');
+  if (!code && !err) return false;
+  history.replaceState(null, '', location.pathname + location.hash);
+  let v = null; try { v = localStorage.getItem(KEY_PKCE); localStorage.removeItem(KEY_PKCE); } catch { /* sin almacenamiento */ }
+  if (err) throw new Error(err);
+  if (!v) throw new Error('No se pudo completar el inicio de sesión. Inténtalo de nuevo.');
+  await guardarSesion(aSesion(await api('/auth/v1/token?grant_type=pkce', { method: 'POST', body: { auth_code: code, code_verifier: v } })));
+  return true;
 }
 
 // ---- datos (una fila por persona) ----

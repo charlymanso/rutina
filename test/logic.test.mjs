@@ -23,6 +23,25 @@ d.menu.semanas.pop();
 // días de gimnasio y objetivos
 assert.equal(L.esDiaGym(d, lun), true);
 assert.equal(L.esDiaGym(d, L.addDays(lun, 1)), false);
+
+// ---- entrenos: varios días, cambio de un día concreto y datos antiguos ----
+const sPush = d.entreno.sesiones[0];
+assert.deepEqual(sPush.dias, [0]); sPush.dias = [0, 3];
+assert.equal(L.sesionGym(d, 3).t, sPush.t, 'la misma sesión en dos días');
+assert.equal(L.diasEntrenoSemana(d), 4, 'cuenta días distintos (lun, mié, jue, vie)');
+const jueves = L.addDays(lun, 3);
+assert.equal(L.objetivo(d, jueves).kcal, d.perfil.objetivos.gym.kcal, 'el jueves ya es día de entreno');
+d.dias[L.iso(jueves)] = { entreno: 'descanso' };
+assert.equal(L.esDiaGym(d, jueves), false); assert.equal(L.objetivo(d, jueves).kcal, d.perfil.objetivos.sin.kcal, 'cambiar a descanso baja el objetivo');
+assert.equal(L.hayCambioDeEntreno(d, jueves), true);
+const martes = L.addDays(lun, 1); d.dias[L.iso(martes)] = { entreno: 's2' };
+assert.equal(L.sesionDelDia(d, martes).t, d.entreno.sesiones[1].t, 'un día de descanso puede llevar otra sesión'); assert.equal(L.objetivo(d, martes).kcal, d.perfil.objetivos.gym.kcal);
+d.dias[L.iso(martes)] = { entreno: 'no-existe' }; assert.equal(L.sesionDelDia(d, martes), null, 'un cambio que apunta a una sesión borrada vuelve al plan (descanso)');
+delete d.dias[L.iso(jueves)]; delete d.dias[L.iso(martes)]; sPush.dias = [0];
+assert.equal(L.diasTexto([0, 2, 4]), 'Lunes, miércoles y viernes'); assert.equal(L.diasTexto([4]), 'Viernes'); assert.equal(L.diasTexto([]), 'Sin día fijo'); assert.equal(L.diasTexto([4, 0], true), 'Lun, Vie');
+const viejaSesiones = normalize({ entreno: { sesiones: [{ dia: 2, t: 'A', ej: [] }, { dia: 0, t: 'B', ej: [] }, { t: 'C' }] } }).entreno.sesiones;
+assert.deepEqual(viejaSesiones.map((x) => x.dias), [[2], [0], []], 'normalize convierte dia → dias'); assert.equal(new Set(viejaSesiones.map((x) => x.id)).size, 3, 'ids únicos'); assert.ok(viejaSesiones.every((x) => !('dia' in x)));
+assert.equal(L.idSesionNueva(d), 's4');
 assert.equal(L.objetivo(d, lun).kcal, 1700);
 
 // nutrición: lunes = avena50+yogur150+plátano + manzana+almendras + pollo150/arroz80/brócoli150/aceite10 + huevo3/espinacas100/aceite5

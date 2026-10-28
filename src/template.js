@@ -43,9 +43,9 @@ export function makeTemplate() {
     { comida: libre(), cena: comida('Tortilla de patata ligera', [['huevo', 3], ['patata', 150], ['cebolla', 50], ['aceite', 10]]) },
   ]];
   d.entreno.sesiones = [
-    { dia: 0, t: 'Empuje: pecho y hombro', min: '60 min', ej: [ej('Press banca', '4×8', true), ej('Press militar con mancuernas', '3×10', true), ej('Fondos en banco', '3×12'), ej('Elevaciones laterales', '3×15', true), ej('Plancha', '3×40 s')] },
-    { dia: 2, t: 'Tirón: espalda y bíceps', min: '60 min', ej: [ej('Remo con barra', '4×8', true), ej('Jalón al pecho', '3×10', true), ej('Remo en polea', '3×12', true), ej('Curl de bíceps', '3×12', true), ej('Face pull', '3×15', true)] },
-    { dia: 4, t: 'Pierna y core', min: '60 min', ej: [ej('Sentadilla', '4×8', true), ej('Peso muerto rumano', '3×10', true), ej('Zancadas', '3×12', true), ej('Elevación de gemelos', '3×15', true), ej('Rueda abdominal', '3×10')] },
+    { id: 's1', dias: [0], t: 'Empuje: pecho y hombro', min: '60 min', ej: [ej('Press banca', '4×8', true), ej('Press militar con mancuernas', '3×10', true), ej('Fondos en banco', '3×12'), ej('Elevaciones laterales', '3×15', true), ej('Plancha', '3×40 s')] },
+    { id: 's2', dias: [2], t: 'Tirón: espalda y bíceps', min: '60 min', ej: [ej('Remo con barra', '4×8', true), ej('Jalón al pecho', '3×10', true), ej('Remo en polea', '3×12', true), ej('Curl de bíceps', '3×12', true), ej('Face pull', '3×15', true)] },
+    { id: 's3', dias: [4], t: 'Pierna y core', min: '60 min', ej: [ej('Sentadilla', '4×8', true), ej('Peso muerto rumano', '3×10', true), ej('Zancadas', '3×12', true), ej('Elevación de gemelos', '3×15', true), ej('Rueda abdominal', '3×10')] },
   ];
   return d;
 }
@@ -61,6 +61,11 @@ export function normalize(raw) {
   out.menu.semanas = out.menu.semanas.map((w) => Array.from({ length: 7 }, (_, i) => ({ comida: null, cena: null, ...((w || [])[i] || {}) })));
   out.entreno = { ...base.entreno, ...(d.entreno || {}) };
   if (!Array.isArray(out.entreno.sesiones)) out.entreno.sesiones = [];
+  const usados = new Set();                                    // versiones anteriores: una sesión = un día (dia) y sin identificador
+  out.entreno.sesiones = out.entreno.sesiones.map((x, i) => {
+    const { dia, ...r } = x || {}; r.dias = Array.isArray(r.dias) ? [...new Set(r.dias.filter((n) => n >= 0 && n <= 6))].sort() : (Number.isInteger(dia) ? [dia] : []);
+    let id = r.id && !usados.has(r.id) ? r.id : `s${i + 1}`; while (usados.has(id)) id += 'x'; usados.add(id); r.id = id; if (!Array.isArray(r.ej)) r.ej = []; return r;
+  });
   for (const g of Object.values(out.ingredientes || {})) {          // datos de versiones anteriores: añade hidratos y grasa si el alimento está en la base
     if (g && g.c == null && g.f == null) { const b = buscarPorNombre(g.n); if (b && b.u === g.u) { g.c = b.c; g.f = b.f; } }
   }

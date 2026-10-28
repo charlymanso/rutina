@@ -30,8 +30,25 @@ export const semanaDe = (data, lunes) => data.menu.semanas[semanaIdx(data, lunes
 export const diaMenu = (data, d) => semanaDe(data, lunesDe(d))[idxDia(d)] || null;
 
 // ---- entreno ----
-export const sesionGym = (data, i) => data.entreno.sesiones.find((s) => s.dia === i) || null;
-export const esDiaGym = (data, d) => !!sesionGym(data, idxDia(d));
+// Una sesión tiene uno o varios días fijos (dias) o ninguno (se usa cuando quieras). Un día concreto puede cambiarse
+// sin tocar el plan: data.dias[fecha].entreno = id de otra sesión, o 'descanso'.
+export const sesionPorId = (data, id) => data.entreno.sesiones.find((x) => x.id === id) || null;
+export const sesionGym = (data, i) => data.entreno.sesiones.find((x) => (x.dias || []).includes(i)) || null; // plan fijo de un día de la semana
+export function sesionDelDia(data, d) {
+  const o = data.dias[iso(d)] && data.dias[iso(d)].entreno;
+  if (o === 'descanso') return null;
+  if (o) { const x = sesionPorId(data, o); if (x) return x; }
+  return sesionGym(data, idxDia(d));
+}
+export const hayCambioDeEntreno = (data, d) => !!(data.dias[iso(d)] && data.dias[iso(d)].entreno);
+export const esDiaGym = (data, d) => !!sesionDelDia(data, d);
+export const diasEntrenoSemana = (data) => new Set(data.entreno.sesiones.flatMap((x) => x.dias || [])).size;
+export const idSesionNueva = (data) => `s${Math.max(0, ...data.entreno.sesiones.map((x) => parseInt(String(x.id).replace(/\D/g, ''), 10) || 0)) + 1}`;
+export function diasTexto(dias, corto = false) {
+  const d = [...dias].sort((a, b) => a - b), n = d.map((i) => (corto ? DIAS[i].slice(0, 3) : DIAS[i]));
+  if (!n.length) return 'Sin día fijo'; if (n.length === 1) return n[0];
+  return corto ? n.join(', ') : `${n.slice(0, -1).join(', ')} y ${n[n.length - 1].toLowerCase()}`.replace(/, ([A-ZÁÉÍÓÚ])/g, (m, c) => `, ${c.toLowerCase()}`);
+}
 
 // ---- ingredientes y nutrición ----
 export const ing = (data, id) => data.ingredientes[id] || { n: id, u: 'g', k: 0, p: 0, s: 'despensa' };
