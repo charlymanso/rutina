@@ -120,3 +120,12 @@ export function racha(data, d = hoy()) {
   while (hechas(r) === total && n < 400) { n++; r = addDays(r, -1); }
   return n;
 }
+
+// ---- versiones ----
+// true si `remota` (p. ej. "v0.1.4") es más nueva que `actual` (p. ej. "0.1.3")
+export function esVersionNueva(actual, remota) {
+  const n = (v) => String(v).replace(/^v/, '').split('-')[0].split('.').map((x) => parseInt(x, 10) || 0);
+  const a = n(actual), b = n(remota);
+  for (let i = 0; i < 3; i++) { if ((b[i] || 0) !== (a[i] || 0)) return (b[i] || 0) > (a[i] || 0); }
+  return false;
+}

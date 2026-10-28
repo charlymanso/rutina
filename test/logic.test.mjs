@@ -73,4 +73,9 @@ const n = normalize({ perfil: { nombre: 'Ana' }, menu: { semanas: [[{ comida: { 
 assert.equal(n.perfil.nombre, 'Ana'); assert.equal(n.menu.semanas[0].length, 7); assert.equal(n.perfil.objetivos.gym.kcal, 2400);
 assert.ok(normalize(null).menu.semanas.length === 1);
 assert.deepEqual(L.listaCompra(emptyData(), 2), {});
+assert.equal(L.esVersionNueva('0.1.3', 'v0.1.4'), true);
+assert.equal(L.esVersionNueva('0.1.4', 'v0.1.4'), false);
+assert.equal(L.esVersionNueva('0.2.0', 'v0.1.9'), false);
+assert.equal(L.esVersionNueva('0.9.9', 'v1.0.0'), true);
+assert.equal(L.esVersionNueva('0.1.10', 'v0.1.9'), false);
 console.log('OK: logic tests');

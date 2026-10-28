@@ -36,6 +36,7 @@ ipcMain.handle('datos:cargar', () => {
   }
   return null;
 });
+ipcMain.handle('app:version', () => app.getVersion());
 ipcMain.handle('datos:guardar', (_e, json) => { guardar(json); return true; });
 ipcMain.handle('datos:exportar', async (e, json) => {
   const w = BrowserWindow.fromWebContents(e.sender);

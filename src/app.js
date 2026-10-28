@@ -2,6 +2,7 @@ import * as L from './logic.js';
 import { makeTemplate, emptyData, normalize } from './template.js';
 import { cargarClima } from './weather.js';
 import { store } from './store.js';
+import { buscarActualizacion } from './update.js';
 
 /* ---------- utilidades de DOM ---------- */
 function h(tag, props, ...kids) {
@@ -37,7 +38,7 @@ const num = (v, def = 0) => { const n = parseFloat(String(v).replace(',', '.'));
 
 /* ---------- estado ---------- */
 let data = emptyData();
-const S = { tab: 'hoy', semSel: 0, compSel: 2, gymOpen: null };
+const S = { tab: 'hoy', semSel: 0, compSel: 2, gymOpen: null, update: null, updateOculto: false };
 const root = document.getElementById('root');
 let saveTimer;
 function commit() { clearTimeout(saveTimer); saveTimer = setTimeout(() => store.save(data), 200); render(); }
@@ -386,7 +387,8 @@ function render() {
   root.replaceChildren(h('div', { class: 'app' },
     h('nav', { class: 'side', 'aria-label': 'Secciones' }, h('div', { class: 'brand' }, 'Rutina'),
       TABS.map(([id, nombre]) => [id === 'ajustes' ? h('div', { class: 'spacer' }) : null, h('button', { class: 'nav', 'aria-current': S.tab === id ? 'page' : null, onclick: () => go(id) }, icon(id), nombre)])),
-    h('main', { class: 'main' }, view())));
+    h('main', { class: 'main' }, S.update && !S.updateOculto ? h('div', { class: 'banner', role: 'status' }, h('span', { class: 'grow' }, `Hay una versión nueva de Rutina (${S.update.version}).`),
+      h('a', { class: 'btn', href: S.update.url, target: '_blank', rel: 'noopener' }, 'Descargar'), h('button', { class: 'btn plain', onclick: () => { S.updateOculto = true; render(); } }, 'Ahora no')) : null, view())));
   document.querySelector('.main').scrollTop = top;
 }
 
@@ -398,5 +400,7 @@ function render() {
   render();
   if (!data.perfil.listo) bienvenida();
   refreshClima();
+  const comprobar = async () => { const u = await buscarActualizacion(); if (u && (!S.update || S.update.version !== u.version)) { S.update = u; S.updateOculto = false; render(); } };
+  comprobar(); setInterval(comprobar, 6 * 3600 * 1000);
   setInterval(() => { if (S.tab === 'hoy' && !document.hidden && !sheets.length && !/^(INPUT|SELECT|TEXTAREA)$/.test((document.activeElement || {}).tagName)) render(); }, 60000);
 })();

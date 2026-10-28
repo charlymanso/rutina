@@ -18,6 +18,8 @@ h1,h2,h3,p{margin:0}
 .num{font-variant-numeric:tabular-nums}
 
 /* ---------- estructura ---------- */
+.banner{max-width:980px;margin:0 auto 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--accent-soft);color:var(--ink);border-radius:14px;padding:10px 12px 10px 16px;font-weight:500}
+.banner .btn{text-decoration:none}
 .app{display:grid;grid-template-columns:232px minmax(0,1fr);height:100%}
 .side{background:var(--side);backdrop-filter:saturate(180%) blur(30px);-webkit-backdrop-filter:saturate(180%) blur(30px);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:2px;-webkit-app-region:drag}
 .side button,.side input{-webkit-app-region:no-drag}
