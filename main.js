@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, session } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, session, safeStorage } = require('electron');
+const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -73,6 +74,40 @@ ipcMain.handle('datos:importar', async (e) => {
   if (r.canceled || !r.filePaths[0]) return null;
   try { return JSON.parse(fs.readFileSync(r.filePaths[0], 'utf8')); } catch { return null; }
 });
+
+// Sesión de la cuenta: se guarda cifrada con el llavero del sistema (Windows/Mac). Nunca va dentro del archivo de datos.
+const SESION = () => path.join(app.getPath('userData'), 'sesion.bin');
+ipcMain.handle('sesion:cargar', () => {
+  try {
+    if (!fs.existsSync(SESION())) return null;
+    const buf = fs.readFileSync(SESION());
+    return JSON.parse(safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(buf) : buf.toString('utf8'));
+  } catch { return null; }
+});
+ipcMain.handle('sesion:guardar', (_e, s) => {
+  if (!s) { try { fs.rmSync(SESION(), { force: true }); } catch { /* ya no existe */ } return true; }
+  const txt = JSON.stringify(s);
+  fs.writeFileSync(SESION(), safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(txt) : txt, { mode: 0o600 });
+  return true;
+});
+
+// Inicio de sesión con Google: se abre el navegador del sistema y Google devuelve el código a una dirección local temporal.
+const PAGINA = (ok) => `<!doctype html><meta charset="utf-8"><title>Rutina</title><body style="font:18px -apple-system,Segoe UI,sans-serif;display:grid;place-items:center;height:100vh;margin:0;background:#f5f5f7;color:#1d1d1f"><div style="text-align:center"><h1 style="font-size:28px">${ok ? 'Listo' : 'No se pudo entrar'}</h1><p>${ok ? 'Ya puedes volver a Rutina y cerrar esta pestaña.' : 'Vuelve a Rutina e inténtalo de nuevo.'}</p></div>`;
+ipcMain.handle('oauth:abrir', (_e, url) => new Promise((resolve, reject) => {
+  let u; try { u = new URL(url); } catch { return reject(new Error('Dirección no válida.')); }
+  if (u.protocol !== 'https:' || !u.hostname.endsWith('.supabase.co')) return reject(new Error('Dirección no permitida.'));
+  const t = setTimeout(() => { srv.close(); reject(new Error('Se agotó el tiempo. Inténtalo de nuevo.')); }, 180000);
+  const srv = http.createServer((req, res) => {
+    const q = new URL(req.url, 'http://127.0.0.1');
+    if (q.pathname !== '/callback') { res.writeHead(404); return res.end(); }
+    const code = q.searchParams.get('code');
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(PAGINA(!!code));
+    clearTimeout(t); srv.close();
+    code ? resolve(code) : reject(new Error(q.searchParams.get('error_description') || 'Se canceló el inicio de sesión.'));
+  });
+  srv.on('error', () => { clearTimeout(t); reject(new Error('No se pudo abrir la conexión local (puerto 53682 ocupado).')); });
+  srv.listen(53682, '127.0.0.1', () => shell.openExternal(url));
+}));
 
 app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));

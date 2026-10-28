@@ -3,6 +3,8 @@ import { makeTemplate, emptyData, normalize } from './template.js';
 import { cargarClima } from './weather.js';
 import { store } from './store.js';
 import { buscarActualizacion } from './update.js';
+import * as Nube from './cloud.js';
+import * as Sync from './sync.js';
 
 /* ---------- utilidades de DOM ---------- */
 function h(tag, props, ...kids) {
@@ -41,7 +43,11 @@ let data = emptyData();
 const S = { tab: 'hoy', semSel: 0, compSel: 2, gymOpen: null, update: null, updateOculto: false, upd: null, autoUpdate: false };
 const root = document.getElementById('root');
 let saveTimer;
-function commit() { clearTimeout(saveTimer); saveTimer = setTimeout(() => store.save(data), 200); render(); }
+function commit() {
+  data.meta = data.meta || {}; data.meta.sucio = true; data.meta.modificado = Date.now();
+  clearTimeout(saveTimer); saveTimer = setTimeout(() => store.save(data), 200); render(); Sync.programar();
+}
+function guardarLocal() { clearTimeout(saveTimer); saveTimer = setTimeout(() => store.save(data), 200); render(); } // cambios que no son del usuario (p. ej. el tiempo): no se sincronizan
 window.addEventListener('beforeunload', () => store.save(data));
 
 function toast(msg) {
@@ -53,7 +59,7 @@ function toast(msg) {
 const sheets = [];
 function sheet({ title, body, save = 'Guardar', onSave, extra, cancel = 'Cancelar', dismissible = true }) {
   const err = h('div', { class: 'err', role: 'alert' });
-  const api = { close() { veil.remove(); sheets.splice(sheets.indexOf(api), 1); } };
+  const api = { close() { veil.remove(); const i = sheets.indexOf(api); if (i >= 0) sheets.splice(i, 1); } };
   const doSave = () => { const r = onSave && onSave(); if (typeof r === 'string') { err.textContent = r; return; } if (r !== false) api.close(); };
   const veil = h('div', { class: 'veil', onmousedown: (e) => { if (e.target === veil && dismissible) api.close(); } },
     h('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
@@ -206,12 +212,13 @@ function bienvenida() {
     data = base; data.perfil = { ...data.perfil, listo: true, nombre: nombre.value.trim(), ciudad: ciudad.value.trim(), objetivos: { gym: { kcal: k, prot: p }, sin: { kcal: Math.round(k * 0.92), prot: p } } };
     sheets.slice().forEach((s) => s.close()); commit(); refreshClima();
   };
-  sheet({ title: 'Bienvenido a Rutina', dismissible: false,
+  S.bienvenida = sheet({ title: 'Bienvenido a Rutina', dismissible: false,
     body: [h('div', { class: 'hero' }, h('div', { class: 'big' }, 'Tu día, claro y a tu ritmo'), h('p', { class: 'mute' }, 'Comidas, compra y entrenos en un solo sitio. Todo se guarda en este ordenador.')),
       field('¿Cómo te llamas?', nombre), field('Ciudad', ciudad), h('div', { class: 'pair' }, field('Calorías al día', kcal), field('Proteína al día (g)', prot)),
       h('p', { class: 'mute small' }, 'Son solo una referencia. Puedes cambiarlos cuando quieras en Ajustes.'),
       h('button', { class: 'btn wide', onclick: () => aplicar(makeTemplate()) }, 'Empezar con un plan de ejemplo'),
-      h('button', { class: 'btn sec wide', onclick: () => aplicar(emptyData()) }, 'Empezar en blanco')] });
+      h('button', { class: 'btn sec wide', onclick: () => aplicar(emptyData()) }, 'Empezar en blanco'),
+      Nube.nubeActiva() ? h('button', { class: 'btn plain wide', onclick: () => abrirCuenta('entrar') }, 'Ya tengo una cuenta') : null] });
 }
 
 /* ---------- acciones ---------- */
@@ -220,7 +227,7 @@ function toggleHecho(f, k) { const d = diaReg(f); d.hechos = d.hechos || {}; if 
 function setEj(f, k, patch) { const d = diaReg(f); d.gym = d.gym || {}; d.gym[k] = { ...(d.gym[k] || {}), ...patch }; commit(); }
 async function refreshClima() {
   const c = await cargarClima(data);
-  if (c && JSON.stringify(c) !== JSON.stringify(data.clima)) { data.clima = c; commit(); }
+  if (c && JSON.stringify(c) !== JSON.stringify(data.clima)) { data.clima = c; guardarLocal(); }
 }
 
 /* ---------- vistas ---------- */
@@ -354,6 +361,7 @@ function viewAjustes() {
   const ings = ingOptions();
   return h('div', { class: 'page' },
     h('div', {}, h('h1', { class: 'title' }, 'Ajustes'), h('p', { class: 'subtitle' }, 'Tu plan, tus objetivos y tus datos')),
+    Nube.nubeActiva() ? cuentaGrupo() : null,
     grupo('Perfil', rowOf('Nombre', txt(p.nombre, (v) => { p.nombre = v; commit(); }, 'Tu nombre')),
       rowOf('Ciudad', txt(p.ciudad, (v) => { p.ciudad = v; data.clima = null; commit(); refreshClima(); }, 'Para el tiempo'), 'Se usa solo para consultar el tiempo.'),
       rowOf('Personas en casa', h('div', { class: 'stepper' }, h('button', { 'aria-label': 'Menos', onclick: () => { p.personas = Math.max(1, (p.personas || 1) - 1); commit(); } }, '−'), h('span', { class: 'num' }, String(p.personas || 1)), h('button', { 'aria-label': 'Más', onclick: () => { p.personas = Math.min(12, (p.personas || 1) + 1); commit(); } }, '+')), 'Multiplica las cantidades de la lista de la compra.')),
@@ -375,7 +383,7 @@ function viewAjustes() {
         confirmSheet('¿Recuperar esta copia?', 'Se sustituirán tu plan y tus registros actuales.', 'Recuperar', () => { data = normalize(raw); data.perfil.listo = true; commit(); toast('Copia recuperada.'); }); }),
       tapRow('Cargar el plan de ejemplo', 'Cambia tu menú y entrenos por los de ejemplo. Tus registros se conservan.', () => confirmSheet('¿Cargar el plan de ejemplo?', 'Se sustituirán tu menú, ingredientes y sesiones.', 'Cargar', () => {
         const T = makeTemplate(); data.ingredientes = T.ingredientes; data.menu = T.menu; data.entreno = T.entreno; commit(); })),
-      tapRow('Borrar todos mis datos', 'No se puede deshacer.', () => confirmSheet('¿Borrar todo?', 'Se eliminarán tu plan, tus registros y tus ajustes de este ordenador.', 'Borrar todo', () => { data = emptyData(); store.save(data); S.tab = 'hoy'; render(); bienvenida(); }))));
+      tapRow('Borrar todos mis datos', 'No se puede deshacer.', () => confirmSheet('¿Borrar todo?', Nube.haySesion() ? 'Se eliminarán tu plan, tus registros y tus ajustes, tanto de este ordenador como de tu cuenta en la nube.' : 'Se eliminarán tu plan, tus registros y tus ajustes de este ordenador.', 'Borrar todo', async () => { if (Nube.haySesion()) { try { await Nube.borrarNube(); } catch { toast('No se pudo borrar la copia de la nube. Inténtalo con conexión.'); return; } } data = emptyData(); store.save(data); S.tab = 'hoy'; render(); bienvenida(); }))));
 }
 
 /* ---------- aviso de actualización ---------- */
@@ -387,6 +395,68 @@ function bannerUpdate() {
   if (S.update && !S.updateOculto && (!S.autoUpdate || (u && u.fase === 'error'))) return h('div', { class: 'banner', role: 'status' }, h('span', { class: 'grow' }, `Hay una versión nueva de Rutina (${S.update.version}).`),
     h('a', { class: 'btn', href: S.update.url, target: '_blank', rel: 'noopener' }, 'Descargar'), h('button', { class: 'btn plain', onclick: () => { S.updateOculto = true; render(); } }, 'Ahora no'));
   return null;
+}
+
+
+/* ---------- cuenta y sincronización ---------- */
+const hace = (ms) => { const m = Math.round((Date.now() - ms) / 60000); return m < 1 ? 'ahora mismo' : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d`; };
+function textoEstado() {
+  const n = S.nube || {};
+  if (n.estado === 'sincronizando') return 'Sincronizando…';
+  if (n.estado === 'offline') return 'Sin conexión. Se sincronizará cuando vuelvas a tener internet.';
+  if (n.estado === 'error') return n.msg || 'No se pudo sincronizar.';
+  const ult = n.ultima || (data.meta || {}).ultima;
+  return ult ? `Sincronizado ${hace(ult)}` : 'Aún no sincronizado';
+}
+function cuentaGrupo() {
+  const u = Nube.usuario();
+  return h('section', { class: 'stack', style: 'gap:8px' }, h('div', { class: 'label', style: 'padding-left:4px' }, 'Cuenta y sincronización'),
+    h('div', { class: 'group' }, u ? [
+      rowOf(u.email, h('button', { class: 'btn plain', onclick: async () => { await Nube.salir(); Sync.olvidar(); S.nube = null; render(); toast('Has cerrado la sesión. Tus datos siguen en este ordenador.'); } }, 'Cerrar sesión')),
+      h('div', { class: 'row' }, h('div', { class: 'grow' }, 'Estado', h('div', { class: 'sub', id: 'estado-nube' }, textoEstado())), h('button', { class: 'btn sec', onclick: () => Sync.sincronizar() }, 'Sincronizar ahora'))
+    ] : [
+      h('div', { class: 'row' }, h('div', { class: 'grow' }, 'Usa Rutina en otro ordenador', h('div', { class: 'sub' }, 'Con una cuenta, tu plan se guarda también en la nube y se sincroniza.')),
+        h('button', { class: 'btn', onclick: () => abrirCuenta('entrar') }, 'Entrar o crear cuenta'))]));
+}
+
+function abrirCuenta(modo = 'entrar') {
+  const correo = h('input', { type: 'text', inputmode: 'email', autocomplete: 'email', placeholder: 'Correo electrónico' });
+  const clave = h('input', { type: 'password', autocomplete: modo === 'entrar' ? 'current-password' : 'new-password', placeholder: 'Contraseña (mínimo 8 caracteres)' });
+  const msg = h('div', { class: 'mute small', role: 'status' });
+  let sh;
+  const ocupado = (on) => sh.el.querySelectorAll('button').forEach((b) => { b.disabled = on; });
+  const terminar = async () => { sh.close(); S.nube = null; toast('Sesión iniciada.'); render(); Sync.sincronizar(); };
+  const accion = async (fn) => {
+    msg.textContent = ''; sh.err.textContent = ''; ocupado(true);
+    try { await fn(); } catch (e) { sh.err.textContent = e.message; } finally { ocupado(false); }
+  };
+  const validar = () => {
+    if (!/^\S+@\S+\.\S+$/.test(correo.value.trim())) throw new Error('Escribe un correo válido.');
+    if (clave.value.length < 8) throw new Error('La contraseña necesita al menos 8 caracteres.');
+  };
+  sh = sheet({ title: 'Tu cuenta', body: [
+    Nube.puedeGoogle() ? [h('button', { class: 'btn sec wide', onclick: () => accion(async () => { msg.textContent = 'Se ha abierto tu navegador. Elige tu cuenta de Google y vuelve aquí.'; await Nube.entrarConGoogle(); await terminar(); }) }, 'Continuar con Google'), h('div', { class: 'mute small', style: 'text-align:center' }, 'o con tu correo')] : null,
+    field('Correo', correo), field('Contraseña', clave), msg,
+    h('button', { class: 'btn wide', onclick: () => accion(async () => { validar(); await Nube.entrar(correo.value.trim(), clave.value); await terminar(); }) }, 'Entrar'),
+    h('button', { class: 'btn sec wide', onclick: () => accion(async () => {
+      validar(); const r = await Nube.registrar(correo.value.trim(), clave.value);
+      if (r.confirmar) msg.textContent = 'Te hemos enviado un correo para confirmar tu cuenta. Ábrelo y después vuelve aquí a entrar.'; else await terminar();
+    }) }, 'Crear cuenta'),
+    h('button', { class: 'btn plain wide', onclick: () => accion(async () => {
+      if (!/^\S+@\S+\.\S+$/.test(correo.value.trim())) throw new Error('Escribe tu correo arriba y vuelve a pulsar.');
+      await Nube.recuperar(correo.value.trim()); msg.textContent = 'Si ese correo tiene cuenta, recibirás un mensaje para cambiar la contraseña.';
+    }) }, '¿Olvidaste tu contraseña?')] });
+  return sh;
+}
+
+function conflictoSheet({ remoto }) {
+  if (S.conflicto) return; S.conflicto = true;
+  const fecha = new Date(remoto.actualizado).toLocaleString('es', { dateStyle: 'long', timeStyle: 'short' });
+  const elegir = async (c) => { S.conflicto = false; sh.close(); await Sync.resolver(c, remoto); toast(c === 'nube' ? 'Se ha cargado lo guardado en tu cuenta.' : 'Se ha guardado lo de este ordenador en tu cuenta.'); };
+  const sh = sheet({ title: 'Tienes datos en dos sitios', dismissible: false, body: [
+    h('p', { class: 'mute' }, `Tu cuenta ya tiene un plan guardado (${fecha}) y este ordenador también tiene datos distintos. Elige cuál conservar. El otro se sustituirá.`),
+    h('button', { class: 'btn wide', onclick: () => elegir('nube') }, 'Usar los de mi cuenta'),
+    h('button', { class: 'btn sec wide', onclick: () => elegir('local') }, 'Usar los de este ordenador')] });
 }
 
 /* ---------- estructura ---------- */
@@ -410,6 +480,15 @@ function render() {
   render();
   if (!data.perfil.listo) bienvenida();
   refreshClima();
+  if (Nube.nubeActiva()) {
+    Sync.init({ getData: () => data, setData: (d) => { data = d; if (S.bienvenida) { S.bienvenida.close(); S.bienvenida = null; } }, guardar: () => store.save(data), render, onConflicto: conflictoSheet,
+      onEstado: (e) => { S.nube = { ...(S.nube || {}), ...e }; const el = document.getElementById('estado-nube'); if (el) el.textContent = textoEstado(); },
+      onSesionCaducada: () => { S.nube = null; render(); toast('Tu sesión ha caducado. Vuelve a entrar en Ajustes.'); } });
+    if (await Nube.cargarSesion()) Sync.sincronizar();
+    let ultimoFoco = 0;
+    window.addEventListener('focus', () => { if (Date.now() - ultimoFoco > 30000) { ultimoFoco = Date.now(); Sync.sincronizar(); } });
+    setInterval(Sync.sincronizar, 5 * 60 * 1000);
+  }
   const comprobar = async () => { const u = await buscarActualizacion(); if (u && (!S.update || S.update.version !== u.version)) { S.update = u; S.updateOculto = false; render(); } };
   if (window.rutina && window.rutina.autoUpdate) {
     S.autoUpdate = await window.rutina.autoUpdate();

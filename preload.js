@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld('rutina', {
   version: () => ipcRenderer.invoke('app:version'),
   autoUpdate: () => ipcRenderer.invoke('update:soporte'),
   onUpdate: (cb) => ipcRenderer.on('update:estado', (_e, estado) => cb(estado)),
+  sesion: { cargar: () => ipcRenderer.invoke('sesion:cargar'), guardar: (x) => ipcRenderer.invoke('sesion:guardar', x) },
+  oauth: (url) => ipcRenderer.invoke('oauth:abrir', url),
   instalarUpdate: () => ipcRenderer.invoke('update:instalar'),
   load: () => ipcRenderer.invoke('datos:cargar'),
   save: (d) => ipcRenderer.invoke('datos:guardar', d),
