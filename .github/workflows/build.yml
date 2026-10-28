@@ -18,9 +18,22 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npm test
-      - run: npx electron-builder --publish never
+      - name: Preparar macOS (evita que el .dmg falle al cerrarse)
+        if: runner.os == 'macOS'
+        run: sudo mdutil -a -i off || true
+      - name: Crear instaladores de Mac, uno detrás de otro
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          npx electron-builder --mac --arm64 --publish never
+          hdiutil detach -force /Volumes/Rutina || true
+          sleep 5
+          npx electron-builder --mac --x64 --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false   # sin firma de Apple por ahora
+      - name: Crear instalador de Windows
+        if: runner.os == 'Windows'
+        run: npx electron-builder --win --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: instaladores-${{ matrix.os }}
