@@ -1,7 +1,7 @@
 {
   "name": "rutina",
   "productName": "Rutina",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "Tu comida, tu compra y tus entrenos en un solo sitio.",
   "author": "Rutina",
   "license": "UNLICENSED",
@@ -58,6 +58,14 @@
       "allowToChangeInstallationDirectory": true,
       "perMachine": false
     },
-    "artifactName": "Rutina-${os}-${arch}.${ext}"
+    "artifactName": "Rutina-${os}-${arch}.${ext}",
+    "publish": {
+      "provider": "github",
+      "owner": "charlymanso",
+      "repo": "rutina"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   }
 }

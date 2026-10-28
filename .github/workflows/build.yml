@@ -74,6 +74,8 @@ jobs:
             dist/*.dmg
             dist/*.zip
             dist/*.exe
+            dist/*.exe.blockmap
+            dist/latest.yml
       - name: Avisar si el .dmg no se creó
         if: steps.dmg.outcome == 'failure'
         run: echo "::error::El .dmg de Mac falló; queda el .zip como alternativa." && exit 1

@@ -38,7 +38,7 @@ const num = (v, def = 0) => { const n = parseFloat(String(v).replace(',', '.'));
 
 /* ---------- estado ---------- */
 let data = emptyData();
-const S = { tab: 'hoy', semSel: 0, compSel: 2, gymOpen: null, update: null, updateOculto: false };
+const S = { tab: 'hoy', semSel: 0, compSel: 2, gymOpen: null, update: null, updateOculto: false, upd: null, autoUpdate: false };
 const root = document.getElementById('root');
 let saveTimer;
 function commit() { clearTimeout(saveTimer); saveTimer = setTimeout(() => store.save(data), 200); render(); }
@@ -378,6 +378,17 @@ function viewAjustes() {
       tapRow('Borrar todos mis datos', 'No se puede deshacer.', () => confirmSheet('¿Borrar todo?', 'Se eliminarán tu plan, tus registros y tus ajustes de este ordenador.', 'Borrar todo', () => { data = emptyData(); store.save(data); S.tab = 'hoy'; render(); bienvenida(); }))));
 }
 
+/* ---------- aviso de actualización ---------- */
+function bannerUpdate() {
+  const u = S.upd; // actualización automática (Windows)
+  if (u && u.fase === 'descargando') return h('div', { class: 'banner', role: 'status' }, h('span', { class: 'grow' }, `Descargando la versión nueva${u.porcentaje != null ? ` (${u.porcentaje} %)` : ''}…`));
+  if (u && u.fase === 'listo') return h('div', { class: 'banner', role: 'status' }, h('span', { class: 'grow' }, `La versión ${u.version} está lista.`),
+    h('button', { class: 'btn', onclick: () => window.rutina.instalarUpdate() }, 'Reiniciar y actualizar'));
+  if (S.update && !S.updateOculto && (!S.autoUpdate || (u && u.fase === 'error'))) return h('div', { class: 'banner', role: 'status' }, h('span', { class: 'grow' }, `Hay una versión nueva de Rutina (${S.update.version}).`),
+    h('a', { class: 'btn', href: S.update.url, target: '_blank', rel: 'noopener' }, 'Descargar'), h('button', { class: 'btn plain', onclick: () => { S.updateOculto = true; render(); } }, 'Ahora no'));
+  return null;
+}
+
 /* ---------- estructura ---------- */
 const TABS = [['hoy', 'Hoy', viewHoy], ['semana', 'Menú', viewSemana], ['compra', 'Compra', viewCompra], ['entreno', 'Entreno', viewEntreno], ['ajustes', 'Ajustes', viewAjustes]];
 function go(tab) { S.tab = tab; render(); const m = document.querySelector('.main'); if (m) m.scrollTop = 0; }
@@ -387,8 +398,7 @@ function render() {
   root.replaceChildren(h('div', { class: 'app' },
     h('nav', { class: 'side', 'aria-label': 'Secciones' }, h('div', { class: 'brand' }, 'Rutina'),
       TABS.map(([id, nombre]) => [id === 'ajustes' ? h('div', { class: 'spacer' }) : null, h('button', { class: 'nav', 'aria-current': S.tab === id ? 'page' : null, onclick: () => go(id) }, icon(id), nombre)])),
-    h('main', { class: 'main' }, S.update && !S.updateOculto ? h('div', { class: 'banner', role: 'status' }, h('span', { class: 'grow' }, `Hay una versión nueva de Rutina (${S.update.version}).`),
-      h('a', { class: 'btn', href: S.update.url, target: '_blank', rel: 'noopener' }, 'Descargar'), h('button', { class: 'btn plain', onclick: () => { S.updateOculto = true; render(); } }, 'Ahora no')) : null, view())));
+    h('main', { class: 'main' }, bannerUpdate(), view())));
   document.querySelector('.main').scrollTop = top;
 }
 
@@ -401,6 +411,10 @@ function render() {
   if (!data.perfil.listo) bienvenida();
   refreshClima();
   const comprobar = async () => { const u = await buscarActualizacion(); if (u && (!S.update || S.update.version !== u.version)) { S.update = u; S.updateOculto = false; render(); } };
+  if (window.rutina && window.rutina.autoUpdate) {
+    S.autoUpdate = await window.rutina.autoUpdate();
+    window.rutina.onUpdate((e) => { S.upd = { ...(S.upd || {}), ...e }; render(); });
+  }
   comprobar(); setInterval(comprobar, 6 * 3600 * 1000);
   setInterval(() => { if (S.tab === 'hoy' && !document.hidden && !sheets.length && !/^(INPUT|SELECT|TEXTAREA)$/.test((document.activeElement || {}).tagName)) render(); }, 60000);
 })();
