@@ -173,3 +173,29 @@ input::placeholder{color:var(--faint)}
   .nav[aria-current=page]{background:none;color:var(--accent)}.nav[aria-current=page] svg{stroke:var(--accent)}
   .main{padding:20px 16px 32px}.title{font-size:28px}
 }
+
+/* ---------- pantalla de inicio ---------- */
+.gate{min-height:100%;height:100%;display:grid;place-items:center;padding:32px 20px;overflow-y:auto;background:radial-gradient(1100px 520px at 50% -10%,var(--accent-soft),transparent 70%),var(--bg)}
+.mac .gate{padding-top:56px}
+.gate-card{width:min(380px,100%);display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px}
+.gate-logo{filter:drop-shadow(0 14px 28px rgba(0,102,214,.35));margin-bottom:10px}
+.gate-title{font-size:44px;line-height:1.05;font-weight:700;letter-spacing:-.035em}
+.gate-sub{color:var(--muted);font-size:18px;white-space:pre-line;margin:6px 0 22px;letter-spacing:-.015em}
+.gate-actions{width:100%;display:flex;flex-direction:column;gap:10px}
+.gate .btn.big{padding:13px 18px;font-size:16px;width:100%}
+.btn.light{background:var(--card);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
+.gate-note{color:var(--faint);font-size:13px;margin-top:22px;max-width:34ch}
+.gate-note a{color:var(--accent)}
+/* ---------- detalles ---------- */
+.chip{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 10px;margin-top:6px;border-radius:10px;border-top:1px solid var(--line)}
+.chip:hover{background:var(--fill)}
+.avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(180deg,#3aa0ff,#0066d6);color:#fff;font-weight:600;display:grid;place-items:center;flex:none}
+.chip-txt{display:flex;flex-direction:column;min-width:0;line-height:1.2}
+.chip-txt b{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip-txt small{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.main.enter .page{animation:rise .24s ease-out}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}}
+a.row.tap{color:inherit;text-decoration:none}
+.btn{transition:filter .15s,transform .05s}.btn:active{transform:scale(.98)}
+@media(max-width:760px){.chip{display:none}}
+.page .banner{margin:0;width:100%}

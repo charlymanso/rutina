@@ -4,5 +4,5 @@
 export const NUBE = {
   url: 'https://gppykryvnikmspqnghxx.supabase.co',
   anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdwcHlrcnl2bmlrbXNwcW5naHh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMyMDc1ODIsImV4cCI6MjEwODc4MzU4Mn0.S--KCwDtcW2JcL6dlaG6vGt3EdTUdVsup2DR_pytwqQ',
-  google: false,
+  google: true,
 };

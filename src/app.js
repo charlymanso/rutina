@@ -40,7 +40,7 @@ const num = (v, def = 0) => { const n = parseFloat(String(v).replace(',', '.'));
 
 /* ---------- estado ---------- */
 let data = emptyData();
-const S = { tab: 'hoy', semSel: 0, compSel: 2, gymOpen: null, update: null, updateOculto: false, upd: null, autoUpdate: false };
+const S = { tab: 'hoy', semSel: 0, compSel: 2, gymOpen: null, update: null, updateOculto: false, upd: null, autoUpdate: false, saltarInicio: false, animar: false, version: '' };
 const root = document.getElementById('root');
 let saveTimer;
 function commit() {
@@ -272,6 +272,16 @@ function resumenCard(f) {
       h('button', { class: 'btn plain', style: 'padding-left:0', onclick: () => addAgenda(f) }, '+ Añadir recordatorio')));
 }
 
+function saludo() {
+  const hr = new Date().getHours(), t = hr < 6 ? 'Buenas noches' : hr < 14 ? 'Buenos días' : hr < 21 ? 'Buenas tardes' : 'Buenas noches';
+  return data.perfil.nombre ? `${t}, ${data.perfil.nombre}` : t;
+}
+function recordatorioCuenta() {
+  if (!Nube.nubeActiva() || Nube.haySesion() || (data.meta || {}).ocultarCuenta) return null;
+  return h('div', { class: 'banner', role: 'note' }, h('span', { class: 'grow' }, 'Crea una cuenta para no perder tus datos y usar Rutina en otro ordenador.'),
+    h('button', { class: 'btn', onclick: () => abrirCuenta('entrar') }, 'Crear cuenta'),
+    h('button', { class: 'btn plain', 'aria-label': 'Ocultar este aviso', onclick: () => { data.meta = data.meta || {}; data.meta.ocultarCuenta = true; guardarLocal(); } }, '✕'));
+}
 function viewHoy() {
   const d = L.hoy(), f = L.iso(d), dm = L.diaMenu(data, d), hechos = L.hechosDe(data, f), slots = [];
   for (const [c, nombre] of L.FIJOS) { const fj = L.fijoOn(data, c); if (fj) slots.push({ k: c, hora: fj.hora, kind: nombre, title: fj.texto, det: itemsText(fj.items) }); }
@@ -292,7 +302,8 @@ function viewHoy() {
   const r = L.racha(data);
 
   return h('div', { class: 'page' },
-    h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, data.perfil.nombre ? `Hola, ${data.perfil.nombre}` : 'Hoy'), h('p', { class: 'subtitle' }, L.fechaLarga(d)))),
+    h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, saludo()), h('p', { class: 'subtitle' }, L.fechaLarga(d)))),
+    recordatorioCuenta(),
     h('div', { class: 'cols' },
       h('div', { class: 'stack' }, slots.length ? h('div', { class: 'group' }, slots.map((s) => slotEl(s, f, sig && sig.k, !!hechos[s.k]))) :
         h('div', { class: 'card empty' }, h('p', {}, 'Hoy no tienes nada en el plan.'), h('button', { class: 'btn', onclick: () => go('semana') }, 'Preparar el menú'))),
@@ -377,6 +388,9 @@ function viewAjustes() {
       data.menu.semanas.length > 1 ? tapRow('Empezar el ciclo esta semana', 'La semana actual pasa a ser la 1.', () => { data.menu.ancla = L.iso(L.lunesDe(L.hoy())); commit(); toast('Ciclo reiniciado.'); }) : null),
     h('section', { class: 'stack', style: 'gap:8px' }, h('div', { class: 'row', style: 'padding:0 4px' }, h('div', { class: 'label grow' }, `Ingredientes · ${ings.length}`), h('button', { class: 'btn plain', onclick: () => editIngrediente(null) }, '+ Añadir')),
       ings.length ? h('div', { class: 'group' }, ings.map(([id, g]) => tapRow(g.n, `${g.k} kcal · ${g.p} g prot. ${g.u === 'ud' ? 'por unidad' : 'por 100 ' + g.u}`, () => editIngrediente(id)))) : h('p', { class: 'mute small' }, 'Aún no hay ingredientes.')),
+    grupo('Acerca de Rutina', rowOf('Versión', h('span', { class: 'mute num' }, S.version || '—')),
+      h('a', { class: 'row tap', href: 'https://charlymanso.github.io/rutina/', target: '_blank', rel: 'noopener' }, h('div', { class: 'grow' }, 'Sitio web'), h('span', { class: 'chev' }, '›')),
+      h('a', { class: 'row tap', href: 'https://charlymanso.github.io/rutina/privacidad.html', target: '_blank', rel: 'noopener' }, h('div', { class: 'grow' }, 'Política de privacidad'), h('span', { class: 'chev' }, '›'))),
     grupo('Datos', tapRow('Guardar una copia', 'Exporta todo a un archivo.', async () => { if (await store.exportar(data)) toast('Copia guardada.'); }),
       tapRow('Recuperar una copia', 'Sustituye lo actual por un archivo guardado.', async () => {
         const raw = await store.importar(); if (!raw) return; if (typeof raw !== 'object' || !raw.menu) return toast('Ese archivo no parece una copia de Rutina.');
@@ -384,6 +398,44 @@ function viewAjustes() {
       tapRow('Cargar el plan de ejemplo', 'Cambia tu menú y entrenos por los de ejemplo. Tus registros se conservan.', () => confirmSheet('¿Cargar el plan de ejemplo?', 'Se sustituirán tu menú, ingredientes y sesiones.', 'Cargar', () => {
         const T = makeTemplate(); data.ingredientes = T.ingredientes; data.menu = T.menu; data.entreno = T.entreno; commit(); })),
       tapRow('Borrar todos mis datos', 'No se puede deshacer.', () => confirmSheet('¿Borrar todo?', Nube.haySesion() ? 'Se eliminarán tu plan, tus registros y tus ajustes, tanto de este ordenador como de tu cuenta en la nube.' : 'Se eliminarán tu plan, tus registros y tus ajustes de este ordenador.', 'Borrar todo', async () => { if (Nube.haySesion()) { try { await Nube.borrarNube(); } catch { toast('No se pudo borrar la copia de la nube. Inténtalo con conexión.'); return; } } data = emptyData(); store.save(data); S.tab = 'hoy'; render(); bienvenida(); }))));
+}
+
+
+/* ---------- logo ---------- */
+function logo(px = 88) {
+  const e = (t, a) => { const n = document.createElementNS(NS, t); for (const k in a) n.setAttribute(k, a[k]); return n; };
+  const svg = e('svg', { viewBox: '0 0 1024 1024', width: px, height: px, 'aria-hidden': 'true' });
+  const defs = e('defs', {}), g = e('linearGradient', { id: 'lg', x1: 0, y1: 0, x2: 0, y2: 1 });
+  g.append(e('stop', { offset: 0, 'stop-color': '#3aa0ff' }), e('stop', { offset: 1, 'stop-color': '#0066d6' })); defs.append(g);
+  svg.append(defs, e('rect', { x: 64, y: 64, width: 896, height: 896, rx: 200, fill: 'url(#lg)' }),
+    e('circle', { cx: 512, cy: 512, r: 262, fill: 'none', stroke: '#fff', 'stroke-opacity': '.28', 'stroke-width': 56 }),
+    e('path', { d: 'M512 250a262 262 0 0 1 247 175', fill: 'none', stroke: '#fff', 'stroke-width': 56, 'stroke-linecap': 'round' }),
+    e('path', { d: 'M390 520l86 86 170-190', fill: 'none', stroke: '#fff', 'stroke-width': 72, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+  return svg;
+}
+
+/* ---------- pantalla de inicio ---------- */
+const mostrarInicio = () => Nube.nubeActiva() && !data.perfil.listo && !Nube.haySesion() && !S.saltarInicio;
+// Después de entrar: si la cuenta ya tenía plan se carga solo; si es nueva, se pasa a la bienvenida.
+async function trasEntrar() {
+  S.nube = null; await Sync.sincronizar(); S.saltarInicio = true; render();
+  if (!data.perfil.listo) bienvenida(); else toast('Sesión iniciada.');
+}
+function viewInicio() {
+  const err = h('div', { class: 'err', role: 'alert', style: 'text-align:center' }), msg = h('div', { class: 'mute small', style: 'text-align:center' });
+  const bloquear = (on) => document.querySelectorAll('.gate button').forEach((b) => { b.disabled = on; });
+  const google = async () => {
+    err.textContent = ''; msg.textContent = 'Se ha abierto tu navegador. Elige tu cuenta de Google y vuelve aquí.'; bloquear(true);
+    try { await Nube.entrarConGoogle(); msg.textContent = ''; await trasEntrar(); } catch (e) { msg.textContent = ''; err.textContent = e.message; } finally { bloquear(false); }
+  };
+  return h('div', { class: 'gate' }, h('div', { class: 'gate-card' },
+    h('div', { class: 'gate-logo' }, logo(96)), h('h1', { class: 'gate-title' }, 'Rutina'), h('p', { class: 'gate-sub' }, 'Tus comidas, tu compra y tus entrenos.\nTu día, claro.'),
+    h('div', { class: 'gate-actions' },
+      Nube.puedeGoogle() ? h('button', { class: 'btn big light', onclick: google }, 'Continuar con Google') : null,
+      h('button', { class: 'btn big', onclick: () => abrirCuenta('entrar', trasEntrar) }, 'Continuar con correo'),
+      h('button', { class: 'btn plain big', onclick: () => { S.saltarInicio = true; render(); bienvenida(); } }, 'Continuar como invitado'), msg, err),
+    h('p', { class: 'gate-note' }, 'Como invitado, tus datos se guardan solo en este ordenador. Con una cuenta puedes usarla también en otros. ',
+      h('a', { href: 'https://charlymanso.github.io/rutina/privacidad.html', target: '_blank', rel: 'noopener' }, 'Privacidad'))));
 }
 
 /* ---------- aviso de actualización ---------- */
@@ -419,13 +471,13 @@ function cuentaGrupo() {
         h('button', { class: 'btn', onclick: () => abrirCuenta('entrar') }, 'Entrar o crear cuenta'))]));
 }
 
-function abrirCuenta(modo = 'entrar') {
+function abrirCuenta(modo = 'entrar', alTerminar = null) {
   const correo = h('input', { type: 'text', inputmode: 'email', autocomplete: 'email', placeholder: 'Correo electrónico' });
   const clave = h('input', { type: 'password', autocomplete: modo === 'entrar' ? 'current-password' : 'new-password', placeholder: 'Contraseña (mínimo 8 caracteres)' });
   const msg = h('div', { class: 'mute small', role: 'status' });
   let sh;
   const ocupado = (on) => sh.el.querySelectorAll('button').forEach((b) => { b.disabled = on; });
-  const terminar = async () => { sh.close(); S.nube = null; toast('Sesión iniciada.'); render(); Sync.sincronizar(); };
+  const terminar = async () => { sh.close(); if (alTerminar) return alTerminar(); S.nube = null; toast('Sesión iniciada.'); render(); Sync.sincronizar(); };
   const accion = async (fn) => {
     msg.textContent = ''; sh.err.textContent = ''; ocupado(true);
     try { await fn(); } catch (e) { sh.err.textContent = e.message; } finally { ocupado(false); }
@@ -461,24 +513,39 @@ function conflictoSheet({ remoto }) {
 
 /* ---------- estructura ---------- */
 const TABS = [['hoy', 'Hoy', viewHoy], ['semana', 'Menú', viewSemana], ['compra', 'Compra', viewCompra], ['entreno', 'Entreno', viewEntreno], ['ajustes', 'Ajustes', viewAjustes]];
-function go(tab) { S.tab = tab; render(); const m = document.querySelector('.main'); if (m) m.scrollTop = 0; }
+function go(tab) { S.tab = tab; S.animar = true; render(); const m = document.querySelector('.main'); if (m) m.scrollTop = 0; }
+function chipUsuario() {
+  const u = Nube.usuario(), nombre = data.perfil.nombre || (u ? u.email.split('@')[0] : 'Invitado');
+  return h('button', { class: 'chip', onclick: () => go('ajustes'), 'aria-label': 'Tu cuenta' },
+    h('span', { class: 'avatar', 'aria-hidden': 'true' }, nombre.trim().charAt(0).toUpperCase() || '?'),
+    h('span', { class: 'chip-txt' }, h('b', {}, nombre), h('small', {}, u ? u.email : 'Solo en este ordenador')));
+}
 function render() {
-  const prev = document.querySelector('.main'), top = prev ? prev.scrollTop : 0, view = TABS.find((t) => t[0] === S.tab)[2];
   document.body.classList.toggle('mac', store.platform() === 'darwin');
+  if (mostrarInicio()) { root.replaceChildren(viewInicio()); return; }
+  const prev = document.querySelector('.main'), top = prev ? prev.scrollTop : 0, view = TABS.find((t) => t[0] === S.tab)[2];
+  const animar = S.animar; S.animar = false;
   root.replaceChildren(h('div', { class: 'app' },
     h('nav', { class: 'side', 'aria-label': 'Secciones' }, h('div', { class: 'brand' }, 'Rutina'),
-      TABS.map(([id, nombre]) => [id === 'ajustes' ? h('div', { class: 'spacer' }) : null, h('button', { class: 'nav', 'aria-current': S.tab === id ? 'page' : null, onclick: () => go(id) }, icon(id), nombre)])),
-    h('main', { class: 'main' }, bannerUpdate(), view())));
+      TABS.map(([id, nombre]) => [id === 'ajustes' ? h('div', { class: 'spacer' }) : null, h('button', { class: 'nav', 'aria-current': S.tab === id ? 'page' : null, onclick: () => go(id) }, icon(id), nombre)]),
+      Nube.nubeActiva() ? chipUsuario() : null),
+    h('main', { class: 'main' + (animar ? ' enter' : '') }, bannerUpdate(), view())));
   document.querySelector('.main').scrollTop = top;
 }
+document.addEventListener('keydown', (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || sheets.length || mostrarInicio()) return;
+  const t = TABS[+e.key - 1]; if (t) { e.preventDefault(); go(t[0]); }
+});
 
 /* ---------- arranque ---------- */
 (async () => {
   const raw = await store.load();
   data = normalize(raw);
+  if (Nube.nubeActiva()) await Nube.cargarSesion();
   if (raw && raw.menu && !raw.perfil) data.perfil.listo = true;
+  if (window.rutina && window.rutina.version) window.rutina.version().then((v) => { S.version = v; });
   render();
-  if (!data.perfil.listo) bienvenida();
+  if (!data.perfil.listo && !mostrarInicio()) bienvenida();
   refreshClima();
   if (Nube.nubeActiva()) {
     Sync.init({ getData: () => data, setData: (d) => { data = d; if (S.bienvenida) { S.bienvenida.close(); S.bienvenida = null; } }, guardar: () => store.save(data), render, onConflicto: conflictoSheet,
