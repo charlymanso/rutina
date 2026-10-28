@@ -301,7 +301,6 @@ button{-webkit-user-select:none;user-select:none}
 
 /* ---------- tarjeta de entreno clicable y vista grande ---------- */
 .slot-main{display:block;text-align:left;width:100%;padding:0;min-width:0}
-.slot-main .slot-ver{display:inline-block;color:var(--accent);font-weight:500;font-size:14px;margin-top:8px}
 .slot-main:hover h3{color:var(--accent)}
 .sheet.grande{width:min(780px,94vw);height:min(900px,92vh);max-height:92vh}
 .grande-titulo{font-size:28px;font-weight:700;letter-spacing:-.025em;line-height:1.15;margin:2px 0}
@@ -334,3 +333,11 @@ button{-webkit-user-select:none;user-select:none}
 }
 .esquema{display:inline-flex;align-items:baseline;gap:2px;font-size:15px;font-weight:600;color:var(--accent);padding:2px 0;text-align:left}
 .esquema .chev{font-size:16px;color:var(--accent)}
+
+.chip-slot{display:contents}
+@media(max-width:760px){
+  .chip-slot{display:none}
+  /* el difuminado va en una capa aparte: así el botón redondo de Hoy, que sobresale, nunca se recorta ni parpadea */
+  .side{position:relative;z-index:5;background:none;backdrop-filter:none;-webkit-backdrop-filter:none;border-top:0;isolation:isolate}
+  .side::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--side);border-top:1px solid var(--line);backdrop-filter:saturate(180%) blur(30px);-webkit-backdrop-filter:saturate(180%) blur(30px)}
+}

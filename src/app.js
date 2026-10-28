@@ -348,7 +348,10 @@ function editSesion(id) {
   const orig = id ? L.sesionPorId(data, id) : null;
   const s = orig ? clone(orig) : { id: L.idSesionNueva(data), dias: [], t: '', min: '60 min', ej: [] };
   if (!orig) { const libre = [0, 2, 4, 1, 3, 5, 6].find((i) => !L.sesionGym(data, i)); if (libre != null) s.dias = [libre]; }
-  const t = h('input', { type: 'text', value: s.t, placeholder: 'Ej. Pierna y core' }), min = h('input', { type: 'text', value: s.min });
+  const t = h('input', { type: 'text', value: s.t, placeholder: 'Ej. Pierna y core' });
+  const dur0 = (() => { const txt = String(s.min || ''), m = txt.match(/(\d+(?:[.,]\d+)?)/); return { valor: m ? m[1].replace('.', ',') : '', unidad: /h/i.test(txt) && !/min/i.test(txt) ? 'h' : 'min' }; })();
+  const durValor = h('input', { type: 'text', inputmode: 'decimal', id: 'ses-dur', value: dur0.valor, placeholder: '60', 'aria-label': 'Duración' });
+  const durUnidad = h('select', { id: 'ses-dur-unidad', 'aria-label': 'Unidad de la duración', value: dur0.unidad }, h('option', { value: 'min' }, 'minutos'), h('option', { value: 'h' }, 'horas'));
   const dias = h('div', { class: 'chips', role: 'group', 'aria-label': 'Días de la semana', id: 'ses-dias' }), aviso = h('p', { class: 'mute small', id: 'ses-aviso' });
   function pintarDias() {
     dias.replaceChildren(...L.DIAS.map((nombre, i) => { const on = s.dias.includes(i);
@@ -367,10 +370,12 @@ function editSesion(id) {
       h('button', { class: 'btn sec', style: 'align-self:flex-start', onclick: () => { s.ej.push({ n: '', s: '3×10', c: true }); draw(); } }, '+ Ejercicio'));
   }
   draw(); pintarDias();
-  sheet({ title: orig ? 'Editar sesión' : 'Nueva sesión', body: [field('Nombre', t), h('div', {}, h('div', { class: 'label', style: 'margin-bottom:6px' }, 'Días en que la haces'), dias, aviso), field('Duración', min), h('div', { class: 'label' }, 'Ejercicios'), lista],
+  sheet({ title: orig ? 'Editar sesión' : 'Nueva sesión', body: [field('Nombre', t), h('div', {}, h('div', { class: 'label', style: 'margin-bottom:6px' }, 'Días en que la haces'), dias, aviso), h('div', {}, h('div', { class: 'label', style: 'margin-bottom:6px' }, 'Duración'), h('div', { class: 'pair', style: 'grid-template-columns:1fr 1fr' }, durValor, durUnidad)), h('div', { class: 'label' }, 'Ejercicios'), lista],
     onSave: () => {
       if (!t.value.trim()) return 'Escribe el nombre de la sesión.';
-      const nueva = { id: s.id, dias: [...s.dias].sort(), t: t.value.trim(), min: min.value.trim(), ej: s.ej.filter((e) => e.n.trim()).map((e) => ({ n: e.n.trim(), s: e.s.trim(), c: !!e.c })) };
+      let min = '';
+      if (durValor.value.trim() !== '') { const n = num(durValor.value, NaN); if (!(n > 0)) return 'Escribe la duración con números, por ejemplo 60 o 1,5.'; if (durUnidad.value === 'min' && n > 600) return 'Son más de 10 horas. Cambia la unidad a horas.'; if (durUnidad.value === 'h' && n > 10) return 'La duración máxima es de 10 horas.'; min = `${L.kgTxt(Math.round(n * 100) / 100)} ${durUnidad.value === 'h' ? 'h' : 'min'}`; }
+      const nueva = { id: s.id, dias: [...s.dias].sort(), t: t.value.trim(), min, ej: s.ej.filter((e) => e.n.trim()).map((e) => ({ n: e.n.trim(), s: e.s.trim(), c: !!e.c })) };
       const otras = data.entreno.sesiones.filter((x) => x.id !== s.id).map((x) => ({ ...x, dias: (x.dias || []).filter((d) => !nueva.dias.includes(d)) }));   // un día solo puede tener una sesión
       const primero = (x) => (x.dias.length ? Math.min(...x.dias) : 9);
       data.entreno.sesiones = [...otras, nueva].sort((a, b) => primero(a) - primero(b)); commit();
@@ -472,7 +477,7 @@ function slotEl(s, f, ahora, hecho) {
     s.progreso != null ? h('div', { class: 'bar', style: 'margin-top:8px' }, h('i', { style: `width:${Math.round(s.progreso * 100)}%` })) : null];
   return h('div', { class: 'slot' + (hecho ? ' hecho' : '') + (s.k === ahora ? ' ahora' : '') },
     h('span', { class: 'hora' }, s.hora),
-    s.accion ? h('button', { class: 'slot-main', id: 'slot-' + s.k, type: 'button', onclick: s.accion, 'aria-label': `${s.kind}: ${s.title}. Abrir` }, ...contenido, h('span', { class: 'slot-ver' }, s.verTexto || 'Abrir ›'))
+    s.accion ? h('button', { class: 'slot-main', id: 'slot-' + s.k, type: 'button', onclick: s.accion, 'aria-label': `${s.kind}: ${s.title}. Abrir` }, ...contenido)
       : h('div', {}, ...contenido, s.extra || null),
     h('button', { class: 'chk', 'aria-pressed': String(hecho), 'aria-label': (hecho ? 'Desmarcar: ' : 'Marcar como hecho: ') + s.kind, onclick: () => toggleHecho(f, s.k) }, icon('check')));
 }
@@ -573,7 +578,7 @@ function viewHoy() {
   }
   const ses = L.sesionDelDia(data, d);
   if (ses) { const reg = L.regGym(data, f), hechasEj = ses.ej.filter((e) => reg[L.slug(e.n)] && reg[L.slug(e.n)].hecho).length;
-    slots.push({ k: 'gym', hora: data.entreno.hora, kind: `Entreno${ses.min ? ' · ' + ses.min : ''}`, title: ses.t, det: `${hechasEj} de ${ses.ej.length} ejercicios`, progreso: ses.ej.length ? hechasEj / ses.ej.length : 0, accion: () => abrirEntrenoHoy(f), verTexto: 'Ver y registrar ›' }); }
+    slots.push({ k: 'gym', hora: data.entreno.hora, kind: `Entreno${ses.min ? ' · ' + ses.min : ''}`, title: ses.t, det: `${hechasEj} de ${ses.ej.length} ejercicios`, progreso: ses.ej.length ? hechasEj / ses.ej.length : 0, accion: () => abrirEntrenoHoy(f) }); }
   slots.sort((a, b) => L.minutos(a.hora) - L.minutos(b.hora));
   const now = new Date(), nm = now.getHours() * 60 + now.getMinutes(), sig = slots.find((s) => !hechos[s.k] && L.minutos(s.hora) >= nm - 60), hechas = slots.filter((s) => hechos[s.k]).length;
 
@@ -879,18 +884,25 @@ function chipUsuario() {
     h('span', { class: 'avatar', 'aria-hidden': 'true' }, nombre.trim().charAt(0).toUpperCase() || '?'),
     h('span', { class: 'chip-txt' }, h('b', {}, nombre), h('small', {}, u ? u.email : 'Solo en este ordenador')));
 }
+let appEl = null, navEl = null, mainEl = null;   // la barra y el contenedor se crean una sola vez y se reutilizan: así la barra no parpadea al cambiar de pestaña
+function construirApp() {
+  navEl = h('nav', { class: 'side', 'aria-label': 'Secciones' }, h('div', { class: 'brand' }, 'Rutina'),
+    TABS.map(([id, nombre]) => [id === 'ajustes' ? h('div', { class: 'spacer' }) : null, h('button', { class: 'nav' + (id === 'hoy' ? ' principal' : ''), 'data-tab': id, onclick: () => go(id) }, h('span', { class: 'ico' }, icon(id)), h('span', { class: 'nl' }, nombre))]),
+    h('div', { class: 'chip-slot' }));
+  mainEl = h('main', { class: 'main' }); appEl = h('div', { class: 'app' }, navEl, mainEl);
+}
 function render() {
   document.body.classList.toggle('mac', store.platform() === 'darwin');
   if (S.auth) { root.replaceChildren(viewAuth()); return; }
   if (mostrarInicio()) { root.replaceChildren(viewInicio()); return; }
-  const prev = document.querySelector('.main'), top = prev ? prev.scrollTop : 0, view = TABS.find((t) => t[0] === S.tab)[2];
-  const animar = S.animar; S.animar = false;
-  root.replaceChildren(h('div', { class: 'app' },
-    h('nav', { class: 'side', 'aria-label': 'Secciones' }, h('div', { class: 'brand' }, 'Rutina'),
-      TABS.map(([id, nombre]) => [id === 'ajustes' ? h('div', { class: 'spacer' }) : null, h('button', { class: 'nav' + (id === 'hoy' ? ' principal' : ''), 'aria-current': S.tab === id ? 'page' : null, onclick: () => go(id) }, h('span', { class: 'ico' }, icon(id)), h('span', { class: 'nl' }, nombre))]),
-      Nube.nubeActiva() ? chipUsuario() : null),
-    h('main', { class: 'main' + (animar ? ' enter' : '') }, bannerUpdate(), view())));
-  document.querySelector('.main').scrollTop = top;
+  const view = TABS.find((t) => t[0] === S.tab)[2];
+  if (!appEl || appEl.parentNode !== root) { construirApp(); root.replaceChildren(appEl); }
+  for (const b of navEl.querySelectorAll('.nav')) { if (b.dataset.tab === S.tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); }
+  navEl.querySelector('.chip-slot').replaceChildren(...(Nube.nubeActiva() ? [chipUsuario()] : []));
+  const top = mainEl.scrollTop, animar = S.animar; S.animar = false;
+  mainEl.className = 'main' + (animar ? ' enter' : '');
+  mainEl.replaceChildren(...[bannerUpdate(), view()].filter(Boolean));
+  mainEl.scrollTop = top;
 }
 document.addEventListener('keydown', (e) => {
   if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || sheets.length || S.auth || mostrarInicio()) return;
