@@ -38,6 +38,7 @@ const ICONS = {
   ingredientes: [['path', { d: 'M4.5 11h15l-1.6 8a2 2 0 0 1-2 1.6H8.1a2 2 0 0 1-2-1.6L4.5 11z' }], ['path', { d: 'M8 11c0-3 1.6-5 4-5s4 2 4 5' }]],
   datos: [['ellipse', { cx: 12, cy: 6, rx: 7, ry: 3 }], ['path', { d: 'M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6' }]],
   barcode: [['path', { d: 'M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M8 9v6M11 9v6M14 9v6M17 9v6' }]],
+  platos: [['circle', { cx: 12, cy: 12, r: 8.5 }], ['circle', { cx: 12, cy: 12, r: 4.5 }]],
   acerca: [['circle', { cx: 12, cy: 12, r: 9 }], ['path', { d: 'M12 11v5.5' }], ['circle', { cx: 12, cy: 7.8, r: .7 }]],
 };
 function icon(name) {
@@ -292,17 +293,21 @@ function platosGuardados(m = 'comida') { // platos distintos que ya usas, para r
 }
 
 /* Platos propios: se arman con ingredientes y quedan guardados para usarlos en cualquier comida. */
-function crearPlato(onListo) {
-  const w = { t: '', items: [] }, nombre = h('input', { type: 'text', id: 'nuevo-plato-nombre', placeholder: 'Ej. Bowl de pollo y arroz' }), total = h('div', { class: 'macros-live num', id: 'nuevo-plato-total', 'aria-live': 'polite' });
+function crearPlato(onListo, existente = null) {
+  const w = existente ? clone(existente) : { t: '', items: [] }, nombre = h('input', { type: 'text', id: 'nuevo-plato-nombre', value: w0(existente), placeholder: 'Ej. Bowl de pollo y arroz' }), total = h('div', { class: 'macros-live num', id: 'nuevo-plato-total', 'aria-live': 'polite' });
   const pintar = () => { total.textContent = 'Por persona: ' + macroTxt(L.sumaItems(data, w.items)); }, edit = itemsEditor(w.items, pintar); pintar();
-  sheet({ title: 'Nuevo plato', save: 'Guardar plato', body: [field('Nombre del plato', nombre), h('div', { class: 'label' }, 'Ingredientes por persona'), edit, total, h('p', { class: 'mute small' }, 'Quedará guardado para elegirlo en cualquier comida.')],
+  sheet({ title: existente ? 'Editar plato' : 'Nuevo plato', save: existente ? 'Guardar' : 'Guardar plato', body: [field('Nombre del plato', nombre), h('div', { class: 'label' }, 'Ingredientes por persona'), edit, total, h('p', { class: 'mute small' }, 'Quedará guardado para elegirlo en cualquier comida.')],
     onSave: () => {
       const t = nombre.value.trim(); if (!t) return 'Escribe el nombre del plato.';
       const items = w.items.filter((it) => it[1] > 0 && data.ingredientes[it[0]]); if (!items.length) return 'Añade al menos un ingrediente con su cantidad.';
-      const pl = { t, items: clone(items) }, k = data.platosPropios.findIndex((x) => x.t === t); if (k >= 0) data.platosPropios[k] = pl; else data.platosPropios.push(pl);
-      commit(); onListo(pl);
-    } });
+      const antes = existente ? data.platosPropios.findIndex((x) => x.t === existente.t) : -1, otro = data.platosPropios.findIndex((x, k) => x.t === t && k !== antes);
+      if (otro >= 0) return 'Ya tienes un plato con ese nombre.';
+      const pl = { t, items: clone(items) }; if (antes >= 0) data.platosPropios[antes] = pl; else data.platosPropios.push(pl);
+      commit(); onListo && onListo(pl);
+    },
+    extra: existente ? h('button', { class: 'btn danger', id: 'plato-borrar', onclick: () => confirmSheet('¿Borrar este plato?', `“${existente.t}” dejará de salir en la lista. Los días del menú que ya lo usan no cambian.`, 'Borrar', () => { data.platosPropios = data.platosPropios.filter((x) => x.t !== existente.t); commit(); sheets.slice().forEach((x) => x.close()); toast('Plato borrado.'); }) }, 'Borrar plato') : null });
 }
+const w0 = (e) => (e ? e.t : '');
 
 /* Editor de un plato de cualquier comida del día, con la opción de repetirlo en otros días de la semana. */
 function editPlato(semana, i, m) {
@@ -314,13 +319,14 @@ function editPlato(semana, i, m) {
   const total = h('div', { class: 'macros-live num', id: 'plato-total', 'aria-live': 'polite' });
   const pintarTotal = () => { total.textContent = 'Por persona: ' + macroTxt(L.sumaItems(data, w.items)); };
   const edit = itemsEditor(w.items, pintarTotal);
-  const guardados = platosGuardados(m).filter((p) => p.t !== w.t);
+  const guardados = platosGuardados(m).filter((p) => p.t !== w.t), nombresPropios = new Set(data.platosPropios.map((p) => p.t)), propios = guardados.filter((p) => nombresPropios.has(p.t)), delMenu = guardados.filter((p) => !nombresPropios.has(p.t));
   const usar = (pl) => { nombre.value = pl.t; w.items.splice(0, w.items.length, ...clone(pl.items)); edit.redraw(); pintarTotal(); };
   const reuse = h('select', { id: 'plato-reusar', 'aria-label': 'Usar un plato que ya tengo', onchange: (e) => {
     const v = e.target.value; e.target.value = ''; if (!v) return;
-    if (v === '__nuevo__') return crearPlato(usar);
+    if (v === '__gestionar__') { sheets.slice().forEach((x) => x.close()); go('ajustes'); irAj('platos'); return; }
     const pl = guardados.find((p) => p.t === v); if (pl) usar(pl);
-  } }, h('option', { value: '' }, 'Usar uno que ya tengo…'), h('option', { value: '__nuevo__' }, '+ Crear un plato nuevo…'), guardados.map((p) => h('option', { value: p.t }, p.t)));
+  } }, h('option', { value: '' }, 'Usar uno que ya tengo…'), h('option', { value: '__gestionar__' }, 'Gestionar platos…'),
+    propios.length ? h('optgroup', { label: 'Mis platos' }, propios.map((p) => h('option', { value: p.t }, p.t))) : null, delMenu.length ? h('optgroup', { label: 'En tu menú' }, delMenu.map((p) => h('option', { value: p.t }, p.t))) : null);
   // Repetir en otros días de esta semana
   const rep = new Set([i]), repetir = h('div', { class: 'stack', style: 'gap:8px' });
   function pintarRep() {
@@ -609,13 +615,16 @@ function viewHoy() {
 
 function platoBtn(semana, i, m) {
   const pl = semana[i][m], s = pl && !pl.libre ? L.sumaItems(data, pl.items) : null;
-  return h('button', { class: 'plato', id: `plato-${m}-${i}`, onclick: () => editPlato(semana, i, m) }, h('span', { class: 'label' }, m === 'comida' ? 'Comida' : 'Cena'),
-    pl ? [h('h3', {}, pl.libre ? 'Comida libre' : pl.t), pl.libre ? h('p', { class: 'det num' }, `~${L.miles(data.perfil.libre.kcal)} kcal`) : [h('p', { class: 'det num kc' }, `${L.miles(s.k)} kcal · P ${f1(s.p)} g`), h('p', { class: 'det' }, itemsText(pl.items))]] : h('h3', { class: 'add' }, '+ Añadir'));
+  return h('button', { class: 'plato meal', id: `plato-${m}-${i}`, onclick: () => editPlato(semana, i, m) },
+    h('div', { class: 'mb' }, h('span', { class: 'label' }, NOMBRE_COMIDA[m]),
+      pl ? [h('h3', {}, pl.libre ? 'Comida libre' : pl.t), pl.libre ? null : h('p', { class: 'det' }, itemsText(pl.items))] : h('h3', { class: 'add' }, '+ Añadir')),
+    pl ? h('span', { class: 'kc num' }, pl.libre ? `~${L.miles(data.perfil.libre.kcal)} kcal` : h('span', {}, `${L.miles(s.k)} kcal`, h('small', {}, `P ${f1(s.p)} g`))) : null);
 }
 function fijaBtn(semana, i, c, d) {
   const f = L.fijoDia(data, d, c), kc = L.sumaItems(data, f.items).k;
-  return h('button', { class: 'mini' + (f.propio ? ' propio' : ''), id: `fija-${c}-${i}`, onclick: () => editPlato(semana, i, c) },
-    h('span', { class: 'label' }, NOMBRE_COMIDA[c]), h('span', { class: 'mt' }, f.texto || '—'), h('span', { class: 'mk num' }, f.items.length ? `${L.miles(kc)} kcal` : 'Sin ingredientes'));
+  return h('button', { class: 'mini meal' + (f.propio ? ' propio' : ''), id: `fija-${c}-${i}`, onclick: () => editPlato(semana, i, c) },
+    h('div', { class: 'mb' }, h('span', { class: 'label' }, NOMBRE_COMIDA[c]), h('span', { class: 'mt' }, f.texto || '—')),
+    h('span', { class: 'mk num' }, f.items.length ? `${L.miles(kc)} kcal` : 'Sin ingredientes'));
 }
 function viewSemana() {
   const lun = L.addDays(L.lunesDe(L.hoy()), S.semSel * 7), w = L.semanaIdx(data, lun), semana = data.menu.semanas[w], fh = L.iso(L.hoy()), n = data.menu.semanas.length;
@@ -633,8 +642,7 @@ function viewSemana() {
       const pct = t && o.kcal ? Math.min(100, t.k / o.kcal * 100) : 0, pasa = t && o.kcal && t.k > o.kcal * 1.1;
       return h('div', { class: 'dayrow' + (L.iso(d) === fh ? ' hoy' : '') }, h('div', { class: 'dn' }, L.DIAS[i], h('small', {}, L.fechaCorta(d) + (L.esDiaGym(data, d) ? ' · con entreno' : '')),
         t && t.k > 0 ? h('div', { class: 'dtot num' }, h('span', { class: pasa ? 'over' : '' }, `${L.miles(t.k)} kcal`), h('span', { class: 'mute' }, ` · P ${L.miles(t.p)} g`), h('div', { class: 'bar' + (pasa ? ' warn' : '') }, h('i', { style: `width:${pct}%` }))) : null),
-        platoBtn(semana, i, 'comida'), platoBtn(semana, i, 'cena'),
-        L.FIJAS.some((c) => L.fijoOn(data, c)) ? h('div', { class: 'fijas' }, L.FIJAS.filter((c) => L.fijoOn(data, c)).map((c) => fijaBtn(semana, i, c, d))) : null); })));
+        h('div', { class: 'meals' }, ['desayuno', 'media', 'comida', 'merienda', 'cena'].filter((m) => !L.FIJAS.includes(m) || L.fijoOn(data, m)).map((m) => (L.FIJAS.includes(m) ? fijaBtn(semana, i, m, d) : platoBtn(semana, i, m))))); })));
 }
 
 function anadirCompra() {
@@ -707,6 +715,13 @@ function viewAjustes() {
       grupo('A mano', rowOf('Día con entreno · calorías', numField(o.gym.kcal, (v) => { o.gym.kcal = v; commit(); })), rowOf('Día con entreno · proteína (g)', numField(o.gym.prot, (v) => { o.gym.prot = v; commit(); })),
         rowOf('Día sin entreno · calorías', numField(o.sin.kcal, (v) => { o.sin.kcal = v; commit(); })), rowOf('Día sin entreno · proteína (g)', numField(o.sin.prot, (v) => { o.sin.prot = v; commit(); }))),
       grupo('Comida libre', rowOf('Calorías', numField(p.libre.kcal, (v) => { p.libre.kcal = v; commit(); }), 'Lo que cuentas cuando comes fuera del plan.'), rowOf('Proteína (g)', numField(p.libre.prot, (v) => { p.libre.prot = v; commit(); }))));
+    case 'platos': {
+      const ps = data.platosPropios.slice().sort((x, y) => x.t.localeCompare(y.t, 'es')), delMenu = platosGuardados('comida').concat(platosGuardados('cena')).filter((x, k, a) => !data.platosPropios.some((p) => p.t === x.t) && a.findIndex((y) => y.t === x.t) === k);
+      return subpagina('Platos', 'Arma platos con tus ingredientes y úsalos en cualquier comida',
+        h('div', { class: 'row', style: 'padding:0;gap:10px;flex-wrap:wrap' }, h('button', { class: 'btn', id: 'plato-nuevo', onclick: () => crearPlato() }, 'Nuevo plato'),
+          delMenu.length ? h('button', { class: 'btn sec', id: 'platos-importar', onclick: () => { delMenu.forEach((x) => data.platosPropios.push({ t: x.t, items: clone(x.items) })); commit(); toast(`${delMenu.length} ${delMenu.length === 1 ? 'plato guardado' : 'platos guardados'}.`); } }, 'Guardar los de mi menú') : null),
+        ps.length ? h('div', { class: 'group', id: 'platos-lista' }, ps.map((x) => tapRow(x.t, macroTxt(L.sumaItems(data, x.items)), () => crearPlato(null, x)))) : h('p', { class: 'mute small', id: 'platos-vacio', style: 'padding-left:4px' }, 'Aún no tienes platos guardados. Crea uno nuevo' + (delMenu.length ? ' o guarda los que ya tienes en tu menú.' : '.')));
+    }
     case 'datos': return subpagina('Datos y copias', 'Tu plan y tus registros',
       grupo(null, tapRow('Guardar una copia', 'Exporta todo a un archivo.', async () => { if (await store.exportar(data)) toast('Copia guardada.'); }),
         tapRow('Recuperar una copia', 'Sustituye lo actual por un archivo guardado.', async () => {
@@ -723,6 +738,7 @@ function viewAjustes() {
       h('div', {}, h('h1', { class: 'title' }, 'Ajustes')),
       grupo(null, Nube.nubeActiva() ? filaAj('cuenta', 'cuenta', '#0a84ff', 'Cuenta', u ? u.email : 'Sin iniciar sesión') : null, filaAj('perfil', 'perfil', '#8e8e93', 'Perfil', p.nombre || 'Tu nombre y tu ciudad')),
       grupo(null, filaAj('objetivos', 'objetivos', '#ff9f0a', 'Objetivos diarios', `${L.miles(o.gym.kcal)} / ${L.miles(o.sin.kcal)} kcal · ${o.gym.prot} g de proteína`)),
+      grupo(null, filaAj('platos', 'platos', '#ff6b35', 'Platos', data.platosPropios.length ? `${data.platosPropios.length} ${data.platosPropios.length === 1 ? 'plato guardado' : 'platos guardados'}` : 'Crea tus platos con ingredientes')),
       grupo(null, filaAj('datos', 'datos', '#5e5ce6', 'Datos y copias', 'Copia de seguridad y borrado'), filaAj('acerca', 'acerca', '#8e8e93', 'Acerca de Rutina', `Versión ${S.version || 'Web'}`)));
   }
 }
