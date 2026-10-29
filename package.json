@@ -12,7 +12,9 @@
     "test": "node test/logic.test.mjs && node test/objetivo.test.mjs",
     "dist": "electron-builder",
     "dist:win": "electron-builder --win",
-    "dist:mac": "electron-builder --mac"
+    "dist:mac": "electron-builder --mac",
+    "test:e2e": "node test/e2e/run.cjs",
+    "test:all": "npm test && node test/e2e/run.cjs --semana"
   },
   "devDependencies": {
     "electron": "^33.2.0",
@@ -38,7 +40,9 @@
         "zip"
       ],
       "icon": "build/icon.png",
-      "extendInfo": { "NSCameraUsageDescription": "Rutina usa la cámara solo para leer códigos de barras de productos." }
+      "extendInfo": {
+        "NSCameraUsageDescription": "Rutina usa la cámara solo para leer códigos de barras de productos."
+      }
     },
     "dmg": {
       "title": "Rutina"

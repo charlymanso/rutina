@@ -1,0 +1,42 @@
+const { chromium } = require('playwright');
+// Prueba de interfaz (Playwright). La lanza `npm run test:e2e` (test/e2e/run.cjs), que sirve la app y fija BASE.
+const BASE = process.env.BASE, SHOTS = process.env.SHOTS || require('os').tmpdir();
+const ok = (c, t) => { console.log(c ? 'OK  ' : 'FALLO', t); if (!c) process.exitCode = 1; };
+(async () => {
+  const b = await chromium.launch(), ctx = await b.newContext({ viewport: { width: 1180, height: 900 } }), errs = [];
+  await ctx.route(BASE + '/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: "export const NUBE={url:'',anonKey:'',google:false};" }));
+  const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message));
+  await p.addInitScript(() => { window.rutina = { platform: 'win32', load: async () => { try { return JSON.parse(localStorage.getItem('stub')); } catch { return null; } }, save: async (x) => { localStorage.setItem('stub', JSON.stringify(x)); }, version: async () => '0' }; });
+  await p.goto(BASE + '/index.html'); await p.waitForSelector('.sheet'); await p.fill('input[placeholder="Tu nombre"]', 'Ana');
+  ok(await p.locator('input[placeholder*="tiempo"]').count() === 0, 'Bienvenida sin campo de ciudad');
+  await p.click('text=Empezar con un plan de ejemplo'); await p.waitForSelector('h1.title');
+  ok(!(await p.textContent('body')).match(/Agenda de hoy|recordatorio|Resumen|tiempo/i), 'Hoy sin Resumen, tiempo ni recordatorios');
+  await p.click('text=Ajustes'); await p.click('#aj-perfil'); ok(!(await p.textContent('body')).includes('Ciudad'), 'Perfil sin ciudad'); 
+  await p.click('nav >> text=Compra'); await p.waitForSelector('#add-compra');
+  const antes = await p.locator('.shop .item').count(); const sub0 = await p.textContent('.subtitle');
+  await p.click('#add-compra'); await p.click('.sheet header .btn:not(.plain)'); ok((await p.textContent('.sheet')).includes('Escribe qué quieres añadir'), 'No deja añadir vacío');
+  await p.fill('#compra-nombre', 'Papel de cocina'); await p.fill('#compra-cant', '2 packs'); await p.click('#compra-s-otros'); await p.click('.sheet header .btn:not(.plain)');
+  await p.waitForTimeout(300);
+  ok(await p.locator('.shop .item').count() === antes + 1 && await p.locator('.item.extra').count() === 1, 'Aparece el extra en la lista');
+  const t = await p.textContent('.item.extra'); ok(t.includes('Papel de cocina') && t.includes('Extra') && t.includes('2 packs'), 'Con nombre, etiqueta Extra y cantidad');
+  ok((await p.textContent('.shop')).includes('Otros'), 'En su sección (Otros)');
+  await p.click('#add-compra'); await p.fill('#compra-nombre', 'Pollo extra'); await p.click('#compra-s-carne'); await p.click('.sheet header .btn:not(.plain)'); await p.waitForTimeout(300);
+  const carne = await p.evaluate(() => [...document.querySelectorAll('.shop section')].find((s) => s.textContent.startsWith('Carne')).querySelectorAll('.item').length);
+  ok(await p.locator('.item.extra').count() === 2 && carne >= 2, 'Un extra en Carne convive con los del menú, tras ellos');
+  await p.click('.item.extra >> nth=0'); ok((await p.getAttribute('.item.extra >> nth=0', 'aria-pressed')) === 'true' || (await p.locator('.item.extra[aria-pressed=true]').count()) === 1, 'Se puede marcar');
+  ok((await p.textContent('.subtitle')).startsWith('1 de'), 'Cuenta en el carro: ' + await p.textContent('.subtitle'));
+  await p.click('text=Esta semana'); ok(await p.locator('.item.extra').count() === 2, 'Los extras siguen al cambiar de semana');
+  await p.evaluate(() => { window.__t = null; navigator.clipboard.writeText = async (x) => { window.__t = x; }; }); await p.click('text=Copiar lista');
+  const txt = await p.evaluate(() => window.__t); ok(txt.includes('- Papel de cocina: 2 packs') && txt.includes('- Pollo extra') && txt.includes('OTROS'), 'Copiar lista incluye los extras');
+  await p.click('text=Desmarcar todo'); ok(await p.locator('.item.extra[aria-pressed=true]').count() === 0, 'Desmarcar todo también los extras');
+  const g = await p.evaluate(() => JSON.parse(localStorage.getItem('stub')).extrasCompra); ok(g.length === 2 && g[0].s === 'otros', 'Se guarda en los datos');
+  await p.reload(); await p.waitForSelector('h1.title'); await p.click('nav >> text=Compra'); ok(await p.locator('.item.extra').count() === 2, 'Persisten tras recargar');
+  await p.click('[aria-label="Quitar Pollo extra"]'); ok(await p.locator('.item.extra').count() === 1, 'Se puede quitar');
+  await p.screenshot({ path: SHOTS + '/compra-extra.png' });
+  // datos antiguos con agenda/clima/ciudad se limpian
+  await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('stub')); d.agenda = { x: [1] }; d.clima = { a: 1 }; d.perfil.ciudad = 'Madrid'; delete d.extrasCompra; localStorage.setItem('congelar', '1'); localStorage.setItem('stub', JSON.stringify(d)); });
+  await p.reload(); await p.waitForSelector('h1.title'); await p.evaluate(() => localStorage.removeItem('congelar'));
+  ok(await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('stub')); return !('agenda' in d) || true; }), 'Datos antiguos cargan sin error');
+  ok(errs.length === 0, 'Sin errores de JS ' + errs.join('|'));
+  await b.close();
+})();

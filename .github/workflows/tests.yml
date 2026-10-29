@@ -1,0 +1,22 @@
+name: Pruebas
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Tests de la lógica
+        run: npm test
+      - name: Instalar Playwright y ffmpeg
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+          sudo apt-get install -y ffmpeg
+      - name: Pruebas de interfaz (cada día de la semana)
+        run: node test/e2e/run.cjs --semana --sin-red

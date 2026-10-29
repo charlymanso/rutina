@@ -26,9 +26,17 @@ docs/       cómo activar las cuentas (CUENTAS.md)
 ```bash
 npm install
 npm start      # app de escritorio
-npm test       # tests de la lógica
+npm test       # tests de la lógica (rápidos)
+npm run test:e2e   # pruebas de interfaz con un navegador real (hace falta Playwright, ver abajo)
 ```
 Para la versión web basta servir `src/` con cualquier servidor estático (`python3 -m http.server`).
+
+## Pruebas
+- `npm test`: la lógica pura (calorías, menú, compra, entrenos, limpieza de datos…).
+- `npm run test:e2e`: 14 pruebas de interfaz que manejan la app como una persona (escritorio y móvil, claro y oscuro, gestos de deslizar, cámara simulada…).
+  Necesitan Playwright (`npm i -D playwright && npx playwright install chromium`) y, para la del lector de códigos, `ffmpeg`.
+- `node test/e2e/run.cjs --semana`: repite todas las pruebas simulando **cada día de la semana**, para asegurar que nada depende del día en que se ejecute. También admite `--fechas=2026-10-26,…`, `--solo=hoy-ui,compra-ui` y `--sin-red`.
+- GitHub ejecuta todo esto en cada subida a `main` (`.github/workflows/tests.yml`).
 
 ## Publicar versiones
 Todo está automatizado con GitHub Actions: al subir a `main` un `package.json` con una versión **nueva**, se crean los instaladores (`Rutina-win-x64.exe`, `Rutina-mac-*.dmg/zip`), se publican en *Releases* y se actualiza la web (`/app/` es la versión móvil). Windows se actualiza solo; en Mac la app avisa de la versión nueva.
