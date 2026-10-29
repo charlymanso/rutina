@@ -170,8 +170,7 @@ function itemsEditor(items, onChange = () => {}) {
     box.replaceChildren();
     items.forEach((it, i) => {
       const sub = h('div', { class: 'sub-line num' }, macroTxt(L.sumaItems(data, [it])));
-      const sel = h('select', { 'aria-label': 'Ingrediente', value: it[0], onchange: (e) => { it[0] = e.target.value; draw(); onChange(); } },
-        !data.ingredientes[it[0]] ? h('option', { value: it[0] }, it[0]) : null, ingOptions().map(([id, g]) => h('option', { value: id }, g.n)));
+      const sel = h('span', { class: 'nm' }, L.ing(data, it[0]).n);
       box.append(h('div', { class: 'itemblock' }, h('div', { class: 'itemrow' }, sel,
         h('input', { type: 'number', min: 0, step: 'any', value: String(it[1]), 'aria-label': 'Cantidad', oninput: (e) => { it[1] = num(e.target.value); sub.textContent = macroTxt(L.sumaItems(data, [it])); onChange(); } }),
         h('span', { class: 'u' }, L.ing(data, it[0]).u), h('button', { class: 'x', 'aria-label': 'Quitar', onclick: () => { items.splice(i, 1); draw(); onChange(); } }, '×')), sub));
@@ -286,9 +285,23 @@ function editIngrediente(id, onDone, relleno = {}) {
 const NOMBRE_COMIDA = { desayuno: 'Desayuno', media: 'Media mañana', comida: 'Comida', merienda: 'Merienda', cena: 'Cena' };
 function platosGuardados(m = 'comida') { // platos distintos que ya usas, para reutilizarlos
   const mapa = new Map(), esFija = L.FIJAS.includes(m), claves = esFija ? [m] : ['comida', 'cena'];
+  data.platosPropios.forEach((p) => mapa.set(p.t, p));
   if (esFija) { const f = data.menu.fijos[m]; if (f && (f.items || []).length) mapa.set(f.texto, { t: f.texto, items: f.items }); }
   data.menu.semanas.forEach((wk) => wk.forEach((d) => claves.forEach((k) => { const pl = d[k]; if (pl && !pl.libre && pl.items && pl.items.length && !mapa.has(pl.t)) mapa.set(pl.t, pl); })));
   return [...mapa.values()].sort((x, y) => x.t.localeCompare(y.t, 'es'));
+}
+
+/* Platos propios: se arman con ingredientes y quedan guardados para usarlos en cualquier comida. */
+function crearPlato(onListo) {
+  const w = { t: '', items: [] }, nombre = h('input', { type: 'text', id: 'nuevo-plato-nombre', placeholder: 'Ej. Bowl de pollo y arroz' }), total = h('div', { class: 'macros-live num', id: 'nuevo-plato-total', 'aria-live': 'polite' });
+  const pintar = () => { total.textContent = 'Por persona: ' + macroTxt(L.sumaItems(data, w.items)); }, edit = itemsEditor(w.items, pintar); pintar();
+  sheet({ title: 'Nuevo plato', save: 'Guardar plato', body: [field('Nombre del plato', nombre), h('div', { class: 'label' }, 'Ingredientes por persona'), edit, total, h('p', { class: 'mute small' }, 'Quedará guardado para elegirlo en cualquier comida.')],
+    onSave: () => {
+      const t = nombre.value.trim(); if (!t) return 'Escribe el nombre del plato.';
+      const items = w.items.filter((it) => it[1] > 0 && data.ingredientes[it[0]]); if (!items.length) return 'Añade al menos un ingrediente con su cantidad.';
+      const pl = { t, items: clone(items) }, k = data.platosPropios.findIndex((x) => x.t === t); if (k >= 0) data.platosPropios[k] = pl; else data.platosPropios.push(pl);
+      commit(); onListo(pl);
+    } });
 }
 
 /* Editor de un plato de cualquier comida del día, con la opción de repetirlo en otros días de la semana. */
@@ -302,10 +315,12 @@ function editPlato(semana, i, m) {
   const pintarTotal = () => { total.textContent = 'Por persona: ' + macroTxt(L.sumaItems(data, w.items)); };
   const edit = itemsEditor(w.items, pintarTotal);
   const guardados = platosGuardados(m).filter((p) => p.t !== w.t);
-  const reuse = guardados.length ? h('select', { id: 'plato-reusar', 'aria-label': 'Usar un plato que ya tengo', onchange: (e) => {
-    const pl = guardados.find((p) => p.t === e.target.value); if (!pl) return;
-    nombre.value = pl.t; w.items.splice(0, w.items.length, ...clone(pl.items)); edit.redraw(); pintarTotal(); e.target.value = '';
-  } }, h('option', { value: '' }, 'Usar uno que ya tengo…'), guardados.map((p) => h('option', { value: p.t }, p.t))) : null;
+  const usar = (pl) => { nombre.value = pl.t; w.items.splice(0, w.items.length, ...clone(pl.items)); edit.redraw(); pintarTotal(); };
+  const reuse = h('select', { id: 'plato-reusar', 'aria-label': 'Usar un plato que ya tengo', onchange: (e) => {
+    const v = e.target.value; e.target.value = ''; if (!v) return;
+    if (v === '__nuevo__') return crearPlato(usar);
+    const pl = guardados.find((p) => p.t === v); if (pl) usar(pl);
+  } }, h('option', { value: '' }, 'Usar uno que ya tengo…'), h('option', { value: '__nuevo__' }, '+ Crear un plato nuevo…'), guardados.map((p) => h('option', { value: p.t }, p.t)));
   // Repetir en otros días de esta semana
   const rep = new Set([i]), repetir = h('div', { class: 'stack', style: 'gap:8px' });
   function pintarRep() {

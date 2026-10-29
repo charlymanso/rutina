@@ -19,7 +19,7 @@ export function emptyData() {
       merienda: { on: false, hora: '17:30', texto: 'Merienda', items: [] } },
       semanas: [Array.from({ length: 7 }, () => ({ comida: null, cena: null }))] },
     entreno: { hora: '18:30', sesiones: [] },
-    dias: {}, compra: {}, extrasCompra: [],
+    dias: {}, compra: {}, extrasCompra: [], platosPropios: [],
   };
 }
 
@@ -71,6 +71,7 @@ export function normalize(raw) {
   }
   for (const k of ['ingredientes', 'dias', 'compra']) if (!out[k] || typeof out[k] !== 'object') out[k] = {};
   delete out.agenda; delete out.clima; if (out.perfil) delete out.perfil.ciudad;                 // versiones anteriores: tiempo y recordatorios ya no existen
+  out.platosPropios = (Array.isArray(out.platosPropios) ? out.platosPropios : []).filter((x) => x && typeof x.t === 'string' && x.t.trim() && Array.isArray(x.items)).map((x) => ({ t: x.t.trim(), items: x.items.filter((it) => Array.isArray(it) && it[0]) }));
   out.extrasCompra = (Array.isArray(out.extrasCompra) ? out.extrasCompra : []).filter((x) => x && typeof x.n === 'string' && x.n.trim())
     .map((x, i) => ({ id: String(x.id || 'x' + i), n: x.n.trim(), q: String(x.q || ''), s: SECC.some(([v]) => v === x.s) ? x.s : 'otros', ok: !!x.ok }));
   return out;
