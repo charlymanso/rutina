@@ -30,7 +30,13 @@ async function ctxMovil(b, { google = false, esquema = 'light', w = 390, h = 844
   await p.click('#aviso-instalar button'); ok(await p.locator('#aviso-instalar').count() === 0, 'El aviso se puede cerrar'); await p.reload(); await p.waitForSelector('.slot'); ok(await p.locator('#aviso-instalar').count() === 0, 'Y no vuelve');
   // ---------- 3) Aviso de versión nueva ----------
   const swFile = require('fs').readFileSync(process.env.WEB + '/sw.js', 'utf8'); require('fs').writeFileSync(process.env.WEB + '/sw.js', swFile.replace("rutina-__BUILD__", 'rutina-nueva'));   // copia temporal, no el código real
+  const yAntes = await p.evaluate(() => document.querySelector('.slot').getBoundingClientRect().top);
   await p.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); await r.update(); }); await p.waitForSelector('#sw-actualizar', { timeout: 8000 }); ok(true, 'Versión nueva: aparece "Hay una versión nueva… Actualizar"');
+  await p.waitForTimeout(400); const yDespues = await p.evaluate(() => document.querySelector('.slot').getBoundingClientRect().top);
+  ok(Math.abs(yAntes - yDespues) < 1, `El aviso flota y NO empuja el contenido (antes ${Math.round(yAntes)} px, después ${Math.round(yDespues)} px)`);
+  ok(await p.evaluate(() => { const b = document.querySelector('#sw-actualizar').closest('.banner').getBoundingClientRect(); return b.top >= 0 && b.bottom <= 140 && b.left >= 0 && b.right <= innerWidth; }), 'Y se ve entero, arriba de la pantalla');
+  await p.click('#sw-ahora-no'); ok(await p.locator('#sw-actualizar').count() === 0, '"Ahora no" oculta el aviso');
+  await p.reload(); await p.waitForSelector('#sw-actualizar', { timeout: 8000 }); ok(true, 'Y vuelve a avisar en el siguiente arranque');
   await Promise.all([p.waitForEvent('load'), p.click('#sw-actualizar')]); await p.waitForSelector('.slot');
   let limpio = false; try { await p.waitForFunction(async () => { const k = await caches.keys(); return k.length === 1 && k[0] === 'rutina-nueva'; }, null, { timeout: 10000 }); limpio = true; } catch { /* se informa abajo */ }
   ok(limpio && await p.locator('#sw-actualizar').count() === 0, 'Al actualizar recarga con la versión nueva y borra la copia vieja (' + (await p.evaluate(async () => (await caches.keys()).join())) + ')');

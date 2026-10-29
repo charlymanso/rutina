@@ -879,12 +879,12 @@ function viewInicio() {
 
 /* ---------- aviso de actualización ---------- */
 function bannerUpdate() {
-  if (S.swNueva) return h('div', { class: 'banner', role: 'status' }, h('span', { class: 'grow' }, 'Hay una versión nueva de Rutina.'), h('button', { class: 'btn', id: 'sw-actualizar', onclick: () => S.swNueva.postMessage('ACTUALIZAR') }, 'Actualizar'));
+  if (S.swNueva && !S.updateOculto) return h('div', { class: 'banner banner-flota', role: 'status' }, h('span', { class: 'grow' }, 'Hay una versión nueva de Rutina.'), h('button', { class: 'btn', id: 'sw-actualizar', onclick: () => S.swNueva.postMessage('ACTUALIZAR') }, 'Actualizar'), h('button', { class: 'btn plain', id: 'sw-ahora-no', onclick: () => { S.updateOculto = true; render(); } }, 'Ahora no'));
   const u = S.upd; // actualización automática (Windows)
-  if (u && u.fase === 'descargando') return h('div', { class: 'banner', role: 'status' }, h('span', { class: 'grow' }, `Descargando la versión nueva${u.porcentaje != null ? ` (${u.porcentaje} %)` : ''}…`));
-  if (u && u.fase === 'listo') return h('div', { class: 'banner', role: 'status' }, h('span', { class: 'grow' }, `La versión ${u.version} está lista.`),
+  if (u && u.fase === 'descargando') return h('div', { class: 'banner banner-flota', role: 'status' }, h('span', { class: 'grow' }, `Descargando la versión nueva${u.porcentaje != null ? ` (${u.porcentaje} %)` : ''}…`));
+  if (u && u.fase === 'listo') return h('div', { class: 'banner banner-flota', role: 'status' }, h('span', { class: 'grow' }, `La versión ${u.version} está lista.`),
     h('button', { class: 'btn', onclick: () => window.rutina.instalarUpdate() }, 'Reiniciar y actualizar'));
-  if (S.update && !S.updateOculto && (!S.autoUpdate || (u && u.fase === 'error'))) return h('div', { class: 'banner', role: 'status' }, h('span', { class: 'grow' }, `Hay una versión nueva de Rutina (${S.update.version}).`),
+  if (S.update && !S.updateOculto && (!S.autoUpdate || (u && u.fase === 'error'))) return h('div', { class: 'banner banner-flota', role: 'status' }, h('span', { class: 'grow' }, `Hay una versión nueva de Rutina (${S.update.version}).`),
     h('a', { class: 'btn', href: S.update.url, target: '_blank', rel: 'noopener' }, 'Descargar'), h('button', { class: 'btn plain', onclick: () => { S.updateOculto = true; render(); } }, 'Ahora no'));
   return null;
 }
