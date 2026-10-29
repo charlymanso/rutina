@@ -627,8 +627,10 @@ function viewHoy() {
   const now = new Date(), nm = now.getHours() * 60 + now.getMinutes(), sig = slots.find((s) => !hechos[s.k] && L.minutos(s.hora) >= nm - 60), hechas = slots.filter((s) => hechos[s.k]).length;
 
   const t = L.totalDia(data, d), c = L.totalDia(data, d, { soloHechos: true }), o = L.objetivo(data, d);
-  const metric = (label, v, goal, unit) => h('div', { class: 'metric' }, h('div', { class: 'top' }, h('span', { class: 'label' }, label), h('span', { class: 'mute small num' }, `objetivo ${L.miles(goal)} ${unit}`)),
-    h('b', { class: 'num' }, `${L.miles(v)} ${unit}`), h('div', { class: 'bar' + (goal && v >= goal ? ' ok' : '') }, h('i', { style: `width:${goal ? Math.min(100, v / goal * 100) : 0}%` })));
+  const metric = (label, v, goal, unit, tope = false) => { const pasa = tope && goal && v > goal * 1.05;   // tope: pasarse del objetivo no es bueno (calorías); con la proteína sí
+    return h('div', { class: 'metric' }, h('div', { class: 'top' }, h('span', { class: 'label' }, label), h('span', { class: 'mute small num' }, `objetivo ${L.miles(goal)} ${unit}`)),
+      h('b', { class: 'num' + (pasa ? ' over' : '') }, `${L.miles(v)} ${unit}`), pasa ? h('span', { class: 'over small num' }, `Te pasas ${L.miles(v - goal)} ${unit}`) : null,
+      h('div', { class: 'bar' + (pasa ? ' over' : goal && v >= goal ? ' ok' : '') }, h('i', { style: `width:${goal ? Math.min(100, v / goal * 100) : 0}%` }))); };
   const cs = L.comidasDelDia(data), total = cs.length;
   const siete = Array.from({ length: 7 }, (_, n) => { const x = L.addDays(d, n - 6), c = cs.filter((k) => L.hechosDe(data, L.iso(x))[k]).length;
     return h('div', { class: 'd7' + (n === 6 ? ' today' : '') }, h('div', { class: 'c' }, h('i', { style: `height:${c / total * 100}%` })), h('span', {}, 'LMXJVSD'[L.idxDia(x)]), h('span', { class: 'num' }, `${c}/${total}`)); });
@@ -641,7 +643,7 @@ function viewHoy() {
       h('div', { class: 'stack' }, slots.length ? h('div', { class: 'group' }, slots.map((s) => slotEl(s, f, sig && sig.k, !!hechos[s.k]))) :
         h('div', { class: 'card empty' }, h('p', {}, 'Hoy no tienes nada en el plan.'), h('button', { class: 'btn', onclick: () => go('semana') }, 'Preparar el menú')), slots.length ? h('p', { class: 'mute small', style: 'padding:0 4px' }, 'Toca una comida para cambiar el plato o las cantidades de hoy.') : null, barraEntreno(d, f), extrasCard(f)),
       h('div', { class: 'stack' },
-        t ? h('section', { class: 'card', id: 'nutricion' }, h('h2', { class: 'sec' }, 'Nutrición'), metric('Proteína', c.p, o.prot, 'g'), metric('Energía', c.k, o.kcal, 'kcal'), c.k > 0 ? macroBar(c) : null,
+        t ? h('section', { class: 'card', id: 'nutricion' }, h('h2', { class: 'sec' }, 'Nutrición'), metric('Proteína', c.p, o.prot, 'g'), metric('Energía', c.k, o.kcal, 'kcal', true), c.k > 0 ? macroBar(c) : null,
           h('p', { class: 'mute small', id: 'nutricion-nota' }, c.k > 0 ? `Suma lo que has marcado como hecho${c.extras ? `, con ${L.miles(c.extras)} kcal de extras` : ''}. ` : 'Se irá completando según marques las comidas como hechas. ', t.k > c.k ? `Faltan ${L.miles(t.k - c.k)} kcal de lo previsto hoy.` : '')) : null,
         h('section', { class: 'card' }, h('h2', { class: 'sec' }, 'Progreso'),
           h('div', { class: 'metric' }, h('div', { class: 'top' }, h('span', { class: 'label' }, 'Hecho hoy'), h('span', { class: 'num mute small' }, `${hechas} de ${slots.length}`)), h('div', { class: 'bar' }, h('i', { style: `width:${slots.length ? hechas / slots.length * 100 : 0}%` }))),

@@ -373,3 +373,6 @@ button{-webkit-user-select:none;user-select:none}
 .plato-sel{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--fill);border-radius:12px;padding:8px 8px 8px 14px}
 .plato-fijo{font-weight:600;min-width:0;overflow-wrap:anywhere}
 .plato-fijo.vacio{font-weight:400;color:var(--muted)}
+
+.bar.over i{background:var(--red)}
+b.over,.metric .over{color:var(--red)}
