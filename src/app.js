@@ -114,24 +114,25 @@ function buscarAlimento({ titulo = 'Añadir alimento', onPick }) {
   let timer = null, seq = 0, online = { estado: 'idle', items: [] };
   const elegir = (a) => {
     let id = a.id;
-    if (!id) { const base = L.slug(a.n) || 'alimento'; id = base; let c = 2; while (data.ingredientes[id]) id = `${base}-${c++}`; const { origen, code, ...ing } = a; data.ingredientes[id] = ing; commit(); }
+    if (!id) { const base = L.slug(a.n) || 'alimento'; id = base; let c = 2; while (data.ingredientes[id]) id = `${base}-${c++}`; const { origen, ...ing } = a; data.ingredientes[id] = ing; }
+    data.ingredientes[id].uso = Date.now(); commit();
     sh.close(); onPick(id, cantidadPorDefecto(data.ingredientes[id]));
   };
   const fila = (a) => h('button', { class: 'row tap res', type: 'button', onclick: () => elegir(a) }, h('div', { class: 'grow' }, a.n, h('div', { class: 'sub num' }, macroPor100(a))), h('span', { class: 'chev' }, '+'));
   const seccion = (titulo, ...hijos) => h('section', { class: 'stack', style: 'gap:6px' }, h('div', { class: 'label', style: 'padding-left:4px' }, titulo), ...hijos);
   function pintar() {
     const t = q.value.trim(), mios = ingOptions().map(([id, g]) => ({ ...g, id }));
-    const mis = t ? buscarLocal(t, mios, 8) : mios.slice(0, 8), nombresMios = new Set(mios.map((m) => normalizar(m.n)));
+    const porUso = (x, y) => (y.uso || 0) - (x.uso || 0), mis = (t ? buscarLocal(t, mios, 200).sort(porUso) : mios.slice().sort(porUso)).slice(0, 8), nombresMios = new Set(mios.map((m) => normalizar(m.n)));
     const base = t ? buscarLocal(t, BASE, 12).filter((a) => !nombresMios.has(normalizar(a.n))) : [];
     const out = [];
-    if (mis.length) out.push(seccion(t ? 'Mis ingredientes' : 'Mis ingredientes recientes', h('div', { class: 'group' }, mis.map(fila))));
+    if (mis.length) out.push(seccion(t ? 'Usados antes' : 'Usados recientemente', h('div', { class: 'group' }, mis.map(fila))));
     if (base.length) out.push(seccion('Base de alimentos', h('div', { class: 'group' }, base.map(fila))));
     if (t.length >= 3) {
       let cuerpo;
       if (online.estado === 'cargando') cuerpo = h('p', { class: 'mute small', style: 'padding-left:4px' }, 'Buscando productos…');
       else if (online.estado === 'noapp') cuerpo = h('p', { class: 'mute small', style: 'padding-left:4px' }, 'La búsqueda de productos de marca necesita conexión. Puedes usar la base incluida o escribir el código de barras.');
       else if (online.estado === 'error') cuerpo = h('p', { class: 'mute small', style: 'padding-left:4px' }, 'No se pudo consultar la base online. Revisa tu conexión; puedes usar tus ingredientes y la base incluida.');
-      else if (online.estado === 'ok') cuerpo = online.items.length ? h('div', { class: 'group' }, online.items.map(fila)) : h('p', { class: 'mute small', style: 'padding-left:4px' }, esCodigoDeBarras(t) ? 'No hay ningún producto con ese código.' : 'Sin resultados de productos.');
+      else if (online.estado === 'ok') cuerpo = online.items.filter((a) => !a.code || !mios.some((m) => m.code === a.code)).length ? h('div', { class: 'group' }, online.items.filter((a) => !a.code || !mios.some((m) => m.code === a.code)).map(fila)) : h('p', { class: 'mute small', style: 'padding-left:4px' }, esCodigoDeBarras(t) ? 'No hay ningún producto con ese código.' : 'Sin resultados de productos.');
       if (cuerpo) out.push(seccion('Productos de supermercado', cuerpo, h('p', { class: 'mute', style: 'font-size:12px;padding-left:4px' }, 'Datos de Open Food Facts, aportados por usuarios. Pueden contener errores.')));
     }
     if (!out.length) out.push(h('p', { class: 'mute small', style: 'text-align:center;padding:18px 0' }, t ? 'No hay coincidencias. Prueba con otra palabra o crea el alimento a mano.' : 'Escribe para buscar.'));
@@ -691,15 +692,6 @@ function viewAjustes() {
       grupo('A mano', rowOf('Día con entreno · calorías', numField(o.gym.kcal, (v) => { o.gym.kcal = v; commit(); })), rowOf('Día con entreno · proteína (g)', numField(o.gym.prot, (v) => { o.gym.prot = v; commit(); })),
         rowOf('Día sin entreno · calorías', numField(o.sin.kcal, (v) => { o.sin.kcal = v; commit(); })), rowOf('Día sin entreno · proteína (g)', numField(o.sin.prot, (v) => { o.sin.prot = v; commit(); }))),
       grupo('Comida libre', rowOf('Calorías', numField(p.libre.kcal, (v) => { p.libre.kcal = v; commit(); }), 'Lo que cuentas cuando comes fuera del plan.'), rowOf('Proteína (g)', numField(p.libre.prot, (v) => { p.libre.prot = v; commit(); }))));
-    case 'ingredientes': {
-      const lista = h('div', { class: 'group', id: 'ing-lista' }), vacio = h('p', { class: 'mute small', id: 'ing-vacio', style: 'padding-left:4px' }, 'Ningún ingrediente coincide.');
-      const filtra = () => { const t = normalizar(S.ajBuscar.trim()), items = ingOptions().filter(([, g]) => !t || normalizar(g.n).includes(t));
-        lista.replaceChildren(...items.map(([id, g]) => tapRow(g.n, macroPor100(g), () => editIngrediente(id)))); lista.hidden = !items.length; vacio.hidden = !!items.length; };
-      const buscar = h('input', { type: 'text', id: 'ing-buscar', placeholder: 'Buscar entre tus ingredientes', value: S.ajBuscar, oninput: (e) => { S.ajBuscar = e.target.value; filtra(); } });
-      const pagina = subpagina('Ingredientes', `${n} ${n === 1 ? 'ingrediente' : 'ingredientes'} en tu plan`,
-        h('div', { class: 'row', style: 'padding:0;gap:10px;flex-wrap:wrap' }, h('button', { class: 'btn', id: 'ing-anadir', onclick: () => buscarAlimento({ titulo: 'Añadir ingrediente', onPick: (id) => toast(`“${data.ingredientes[id].n}” añadido a tus ingredientes.`) }) }, '+ Añadir ingrediente'), h('button', { class: 'btn plain', id: 'ing-crear', onclick: () => editIngrediente(null) }, 'Crear a mano')),
-        n > 6 ? buscar : null, lista, vacio, n ? null : h('p', { class: 'mute small' }, 'Aún no hay ingredientes. Se añaden al buscar alimentos en un plato.'));
-      filtra(); return pagina; }
     case 'datos': return subpagina('Datos y copias', 'Tu plan y tus registros',
       grupo(null, tapRow('Guardar una copia', 'Exporta todo a un archivo.', async () => { if (await store.exportar(data)) toast('Copia guardada.'); }),
         tapRow('Recuperar una copia', 'Sustituye lo actual por un archivo guardado.', async () => {
@@ -716,7 +708,6 @@ function viewAjustes() {
       h('div', {}, h('h1', { class: 'title' }, 'Ajustes')),
       grupo(null, Nube.nubeActiva() ? filaAj('cuenta', 'cuenta', '#0a84ff', 'Cuenta', u ? u.email : 'Sin iniciar sesión') : null, filaAj('perfil', 'perfil', '#8e8e93', 'Perfil', p.nombre || 'Tu nombre y tu ciudad')),
       grupo(null, filaAj('objetivos', 'objetivos', '#ff9f0a', 'Objetivos diarios', `${L.miles(o.gym.kcal)} / ${L.miles(o.sin.kcal)} kcal · ${o.gym.prot} g de proteína`)),
-      grupo(null, filaAj('ingredientes', 'ingredientes', '#30b04f', 'Ingredientes', `${n} ${n === 1 ? 'ingrediente' : 'ingredientes'}`)),
       grupo(null, filaAj('datos', 'datos', '#5e5ce6', 'Datos y copias', 'Copia de seguridad y borrado'), filaAj('acerca', 'acerca', '#8e8e93', 'Acerca de Rutina', `Versión ${S.version || 'Web'}`)));
   }
 }
