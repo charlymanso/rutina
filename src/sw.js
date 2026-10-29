@@ -4,7 +4,8 @@ const CACHE = 'rutina-__BUILD__';
 const ARCHIVOS = ['./', 'index.html', 'styles.css', 'app.js', 'logic.js', 'template.js', 'store.js', 'cloud.js', 'sync.js', 'config.js', 'update.js', 'off.js', 'scanner.js', 'vendor/zxing.min.js', 'alimentos.js', 'objetivo.js', 'recetas.js',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
-self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ARCHIVOS))); });
+// 'reload': al instalar una versión nueva nunca se copian archivos viejos de la caché del navegador.
+self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ARCHIVOS.map((u) => new Request(u, { cache: 'reload' }))))); });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k.startsWith('rutina-') && k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
