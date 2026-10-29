@@ -78,7 +78,7 @@ function sheet({ title, body, save = 'Guardar', onSave, extra, cancel = 'Cancela
       h('div', { class: 'body' }, body, err),
       extra ? h('footer', {}, extra) : null));
   api.el = veil; api.err = err; sheets.push(api); document.body.append(veil);
-  const first = veil.querySelector('input[type=text],input[type=number]'); if (first) first.focus();
+  const first = veil.querySelector('input[type=text]'); if (first) first.focus();
   return api;
 }
 function confirmSheet(title, msg, okLabel, onOk) {
@@ -510,13 +510,34 @@ function slotEl(s, f, ahora, hecho) {
       : h('div', {}, ...contenido, s.extra || null),
     h('button', { class: 'chk', 'aria-pressed': String(hecho), 'aria-label': (hecho ? 'Desmarcar: ' : 'Marcar como hecho: ') + s.kind, onclick: () => toggleHecho(f, s.k) }, icon('check')));
 }
-/* Cambiar lo que comes hoy (solo hoy, el plan no se toca). */
+/* Ajustar lo que comes hoy: otro plato y/o otras cantidades, solo para hoy (el plan no se toca). */
+const PORCIONES = [[0.5, '½'], [0.75, '¾'], [1, '1×'], [1.25, '1¼'], [1.5, '1½'], [2, '2×']];
 function cambiarComidaHoy(f, d, k) {
-  const nombre = NOMBRE_COMIDA[k], cambiado = !!L.cambioDe(data, f, k);
-  const poner = (pl) => { const r = diaReg(f); r.cambios = r.cambios || {}; r.cambios[k] = pl; commit(); };
-  elegirPlato({ titulo: `Hoy · ${nombre}`, m: k, actual: (L.platoDelDia(data, d, k) || {}).t, libre: !L.FIJAS.includes(k), onLibre: () => poner({ t: 'Comida libre', libre: true, items: [] }),
-    quitar: cambiado ? { texto: 'Volver al plan', sub: 'Quita el cambio de hoy', fn: () => { const r = diaReg(f); delete r.cambios[k]; if (!Object.keys(r.cambios).length) delete r.cambios; commit(); } } : null,
-    onPick: (x) => poner({ t: x.t, items: clone(x.items) }) });
+  const nombre = NOMBRE_COMIDA[k], cambiado = !!L.cambioDe(data, f, k), actual = L.platoDelDia(data, d, k), plan = L.platoDelDia(data, d, k, { cambios: false });
+  const w = clone({ t: actual.libre ? 'Comida libre' : actual.t, items: actual.items || [], libre: !!actual.libre });
+  let origen = clone(w.items), factor = cambiado ? null : 1;
+  const cuerpo = h('div', { class: 'stack', style: 'gap:14px' }), total = h('div', { class: 'macros-live num', id: 'hoy-total', 'aria-live': 'polite' }), chips = h('div', { class: 'chips', id: 'hoy-porciones', role: 'group', 'aria-label': 'Porción' });
+  const pintarTotal = () => { total.textContent = w.libre ? `Comida libre: cuenta unas ${L.miles(data.perfil.libre.kcal)} kcal` : 'Hoy, por persona: ' + macroTxt(L.sumaItems(data, w.items)); };
+  const pintarChips = () => chips.replaceChildren(...PORCIONES.map(([v, t]) => h('button', { type: 'button', class: 'chipopt', id: 'porcion-' + v, 'aria-pressed': String(factor === v), onclick: () => {
+    factor = v; w.items.splice(0, w.items.length, ...origen.map(([id, q]) => [id, L.ing(data, id).u === 'ud' ? Math.round(q * v * 2) / 2 : Math.round(q * v)])); edit.redraw(); pintarChips(); pintarTotal(); } }, t)));
+  const edit = itemsEditor(w.items, () => { factor = null; pintarChips(); pintarTotal(); });
+  const nombreEl = h('div', { class: 'plato-fijo', id: 'plato-nombre' }), btn = h('button', { type: 'button', class: 'btn sec', id: 'plato-elegir', onclick: () => elegirPlato({ titulo: `Hoy · ${nombre}`, m: k, actual: w.t, libre: !L.FIJAS.includes(k),
+    onLibre: () => { w.libre = true; w.t = 'Comida libre'; w.items.splice(0); draw(); },
+    onPick: (x) => { w.libre = false; w.t = x.t; w.items.splice(0, w.items.length, ...clone(x.items)); origen = clone(w.items); factor = 1; edit.redraw(); draw(); } }) }, 'Cambiar plato');
+  function draw() {
+    nombreEl.textContent = w.t; pintarChips(); pintarTotal();
+    cuerpo.replaceChildren(...[h('div', { class: 'field' }, h('span', {}, 'Plato'), h('div', { class: 'plato-sel' }, nombreEl, btn)),
+      ...(w.libre ? [total] : [h('div', { class: 'field' }, h('span', {}, 'Porción'), chips), h('div', { class: 'label' }, 'Ingredientes de hoy, por persona'), edit, total]),
+      h('p', { class: 'mute small' }, 'Los cambios valen solo para hoy: el menú no se modifica.')]);
+  }
+  draw();
+  sheet({ title: `Hoy · ${nombre}`, body: cuerpo, save: 'Guardar',
+    onSave: () => {
+      const r = diaReg(f), cl = w.libre ? { t: 'Comida libre', libre: true, items: [] } : { t: w.t, items: w.items.filter((it) => it[1] > 0 && data.ingredientes[it[0]]) };
+      const igual = plan && !!plan.libre === !!cl.libre && plan.t === cl.t && JSON.stringify((plan.items || []).map((x) => [x[0], x[1]])) === JSON.stringify(cl.items.map((x) => [x[0], x[1]]));
+      r.cambios = r.cambios || {}; if (igual) delete r.cambios[k]; else r.cambios[k] = cl; if (!Object.keys(r.cambios).length) delete r.cambios; commit();
+    },
+    extra: cambiado ? h('button', { class: 'btn danger', id: 'hoy-volver', onclick: () => { const r = diaReg(f); delete r.cambios[k]; if (!Object.keys(r.cambios).length) delete r.cambios; commit(); sheets.slice().forEach((x) => x.close()); toast('Vuelve a lo del plan.'); } }, 'Volver al plan') : null });
 }
 /* Vista grande del entreno de hoy: se abre al tocar la tarjeta. Recuerda el último peso de cada ejercicio. */
 function abrirEntrenoHoy(f) {
@@ -597,7 +618,7 @@ function viewHoy() {
   const d = L.hoy(), f = L.iso(d), dm = L.diaMenu(data, d), hechos = L.hechosDe(data, f), slots = [];
   for (const [c, nombre] of [['desayuno', 'Desayuno'], ['media', 'Media mañana'], ['comida', 'Comida'], ['merienda', 'Merienda'], ['cena', 'Cena']]) {
     const pl = L.platoDelDia(data, d, c); if (!pl) continue; const esF = L.FIJAS.includes(c);
-    slots.push({ k: c, hora: esF ? L.fijoOn(data, c).hora : data.menu.horas[c], kind: nombre + (pl.cambiado ? ' · cambiado' : ''), title: pl.libre ? 'Comida libre' : pl.t, det: pl.libre ? 'Que lleve una ración clara de proteína.' : itemsText(pl.items), accion: () => cambiarComidaHoy(f, d, c), aria: 'Cambiar lo que comes hoy' });
+    slots.push({ k: c, hora: esF ? L.fijoOn(data, c).hora : data.menu.horas[c], kind: nombre + (pl.cambiado ? ' · cambiado' : ''), title: pl.libre ? 'Comida libre' : pl.t, det: pl.libre ? 'Que lleve una ración clara de proteína.' : itemsText(pl.items), accion: () => cambiarComidaHoy(f, d, c), aria: 'Ajustar lo de hoy' });
   }
   const ses = L.sesionDelDia(data, d);
   if (ses) { const reg = L.regGym(data, f), hechasEj = ses.ej.filter((e) => reg[L.slug(e.n)] && reg[L.slug(e.n)].hecho).length;
@@ -618,7 +639,7 @@ function viewHoy() {
     avisoInstalar(), recordatorioCuenta(),
     h('div', { class: 'cols' },
       h('div', { class: 'stack' }, slots.length ? h('div', { class: 'group' }, slots.map((s) => slotEl(s, f, sig && sig.k, !!hechos[s.k]))) :
-        h('div', { class: 'card empty' }, h('p', {}, 'Hoy no tienes nada en el plan.'), h('button', { class: 'btn', onclick: () => go('semana') }, 'Preparar el menú')), slots.length ? h('p', { class: 'mute small', style: 'padding:0 4px' }, 'Toca una comida si hoy has comido otra cosa.') : null, barraEntreno(d, f), extrasCard(f)),
+        h('div', { class: 'card empty' }, h('p', {}, 'Hoy no tienes nada en el plan.'), h('button', { class: 'btn', onclick: () => go('semana') }, 'Preparar el menú')), slots.length ? h('p', { class: 'mute small', style: 'padding:0 4px' }, 'Toca una comida para cambiar el plato o las cantidades de hoy.') : null, barraEntreno(d, f), extrasCard(f)),
       h('div', { class: 'stack' },
         t ? h('section', { class: 'card', id: 'nutricion' }, h('h2', { class: 'sec' }, 'Nutrición'), metric('Proteína', c.p, o.prot, 'g'), metric('Energía', c.k, o.kcal, 'kcal'), c.k > 0 ? macroBar(c) : null,
           h('p', { class: 'mute small', id: 'nutricion-nota' }, c.k > 0 ? `Suma lo que has marcado como hecho${c.extras ? `, con ${L.miles(c.extras)} kcal de extras` : ''}. ` : 'Se irá completando según marques las comidas como hechas. ', t.k > c.k ? `Faltan ${L.miles(t.k - c.k)} kcal de lo previsto hoy.` : '')) : null,
