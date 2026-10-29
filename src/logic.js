@@ -85,13 +85,23 @@ export function fijoDia(data, d, clave) {
 export const FIJAS = ['desayuno', 'media', 'merienda'];
 export const comidasDelDia = (data) => ['desayuno', 'media', 'merienda'].filter((c) => fijoOn(data, c)).concat(['comida', 'cena']);
 
-export function totalDia(data, d, { extras = true } = {}) {
+// Lo que de verdad toca (o se ha elegido) para una comida de un día concreto: el cambio de ese día si lo hay, si no el plan.
+export const cambioDe = (data, f, k) => (data.dias[f] && data.dias[f].cambios && data.dias[f].cambios[k]) || null;
+export function platoDelDia(data, d, k, { cambios = true } = {}) {
+  if (FIJAS.includes(k) && !fijoOn(data, k)) return null;
+  const c = cambios ? cambioDe(data, iso(d), k) : null; if (c) return { ...c, items: c.items || [], cambiado: true };
+  if (FIJAS.includes(k)) { const fj = fijoDia(data, d, k); return { t: fj.texto, items: fj.items, hora: fj.hora }; }
+  const dm = diaMenu(data, d); return dm && dm[k] ? dm[k] : null;
+}
+// soloHechos: suma únicamente lo que ya has marcado como hecho (más tus extras). cambios:false ignora los cambios de ese día (vista del menú).
+export function totalDia(data, d, { extras = true, soloHechos = false, cambios = true } = {}) {
   const dm = diaMenu(data, d); if (!dm) return null;
+  const hechos = soloHechos ? hechosDe(data, iso(d)) : null;
   let k = 0, p = 0, c = 0, f = 0, libre = false, completo = true;
   const suma = (s) => { k += s.k; p += s.p; c += s.c; f += s.f; if (!s.completo) completo = false; };
-  for (const cl of FIJAS) { const fj = fijoDia(data, d, cl); if (fj) suma(sumaItems(data, fj.items)); }
-  for (const m of ['comida', 'cena']) {
-    const pl = dm[m]; if (!pl) continue;
+  for (const m of ['desayuno', 'media', 'comida', 'merienda', 'cena']) {
+    if (hechos && !hechos[m]) continue;
+    const pl = platoDelDia(data, d, m, { cambios }); if (!pl) continue;
     if (pl.libre) { libre = true; k += data.perfil.libre.kcal; p += data.perfil.libre.prot; completo = false; continue; }
     suma(sumaItems(data, pl.items));
   }

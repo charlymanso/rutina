@@ -368,3 +368,8 @@ button{-webkit-user-select:none;user-select:none}
 .meal.plato h3{font-size:16px}
 .meal.plato .kc{text-align:right;white-space:nowrap;font-weight:600;font-size:14px;color:var(--ink)}
 .meal.plato .kc small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+
+/* Plato elegido (fijo) */
+.plato-sel{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--fill);border-radius:12px;padding:8px 8px 8px 14px}
+.plato-fijo{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.plato-fijo.vacio{font-weight:400;color:var(--muted)}

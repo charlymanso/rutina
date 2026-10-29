@@ -78,7 +78,7 @@ function sheet({ title, body, save = 'Guardar', onSave, extra, cancel = 'Cancela
       h('div', { class: 'body' }, body, err),
       extra ? h('footer', {}, extra) : null));
   api.el = veil; api.err = err; sheets.push(api); document.body.append(veil);
-  const first = veil.querySelector('input[type=text],input[type=number],select'); if (first) first.focus();
+  const first = veil.querySelector('input[type=text],input[type=number]'); if (first) first.focus();
   return api;
 }
 function confirmSheet(title, msg, okLabel, onOk) {
@@ -292,6 +292,20 @@ function platosGuardados(m = 'comida') { // platos distintos que ya usas, para r
   return [...mapa.values()].sort((x, y) => x.t.localeCompare(y.t, 'es'));
 }
 
+/* Selector de platos (lista, no desplegable): Gestionar platos arriba, luego los tuyos y los que ya usas en el menú. */
+function elegirPlato({ titulo = 'Elegir plato', m = 'comida', actual = '', libre = false, quitar = null, onPick, onLibre }) {
+  const gs = platosGuardados(m), nombresPropios = new Set(data.platosPropios.map((x) => x.t)), propios = gs.filter((x) => nombresPropios.has(x.t)), delMenu = gs.filter((x) => !nombresPropios.has(x.t));
+  const fila = (txt, sub, fn, id) => h('button', { class: 'row tap res', type: 'button', id, onclick: fn }, h('div', { class: 'grow' }, txt, sub ? h('div', { class: 'sub num' }, sub) : null), h('span', { class: 'chev' }, actual && actual === txt ? '✓' : '›'));
+  const plato = (x) => fila(x.t, macroTxt(L.sumaItems(data, x.items)), () => { sh.close(); onPick(x); });
+  const seccion = (t, rows) => h('section', { class: 'stack', style: 'gap:6px' }, h('div', { class: 'label', style: 'padding-left:4px' }, t), h('div', { class: 'group' }, rows));
+  const sh = sheet({ title: titulo, cancel: 'Cerrar', body: [
+    h('div', { class: 'group' }, fila('Gestionar platos', 'Crea y edita tus platos', () => { sheets.slice().forEach((x) => x.close()); go('ajustes'); irAj('platos'); }, 'elegir-gestionar')),
+    libre || quitar ? h('div', { class: 'group' }, libre ? fila('Comida libre', `Cuenta unas ${L.miles(data.perfil.libre.kcal)} kcal`, () => { sh.close(); onLibre(); }, 'elegir-libre') : null, quitar ? fila(quitar.texto, quitar.sub, () => { sh.close(); quitar.fn(); }, 'elegir-quitar') : null) : null,
+    propios.length ? seccion('Mis platos', propios.map(plato)) : null, delMenu.length ? seccion('En tu menú', delMenu.map(plato)) : null,
+    !propios.length && !delMenu.length ? h('p', { class: 'mute small', style: 'text-align:center;padding:12px 0' }, 'Aún no tienes platos. Créalos en Gestionar platos.') : null] });
+  return sh;
+}
+
 /* Platos propios: se arman con ingredientes y quedan guardados para usarlos en cualquier comida. */
 function crearPlato(onListo, existente = null) {
   const w = existente ? clone(existente) : { t: '', items: [] }, nombre = h('input', { type: 'text', id: 'nuevo-plato-nombre', value: w0(existente), placeholder: 'Ej. Bowl de pollo y arroz' }), total = h('div', { class: 'macros-live num', id: 'nuevo-plato-total', 'aria-live': 'polite' });
@@ -313,20 +327,13 @@ const w0 = (e) => (e ? e.t : '');
 function editPlato(semana, i, m) {
   const esFija = L.FIJAS.includes(m), def = esFija ? data.menu.fijos[m] : null, propio = semana[i][m];
   const orig = propio || null, w = clone(propio || (esFija && def ? { t: def.texto, items: def.items || [] } : { t: '', items: [] })); if (!w.items) w.items = [];
-  const ejemplos = { desayuno: 'Ej. Avena con yogur', media: 'Ej. Fruta y frutos secos', comida: 'Ej. Pollo con arroz', merienda: 'Ej. Yogur con fruta', cena: 'Ej. Tortilla de espinacas' };
-  const nombre = h('input', { type: 'text', id: 'plato-nombre', value: w.t === 'Comida libre' && w.libre ? '' : w.t, placeholder: ejemplos[m] });
+  if (w.libre) w.t = '';
   const cuerpo = h('div', { class: 'stack', style: 'gap:14px' });
   const total = h('div', { class: 'macros-live num', id: 'plato-total', 'aria-live': 'polite' });
   const pintarTotal = () => { total.textContent = 'Por persona: ' + macroTxt(L.sumaItems(data, w.items)); };
   const edit = itemsEditor(w.items, pintarTotal);
-  const guardados = platosGuardados(m).filter((p) => p.t !== w.t), nombresPropios = new Set(data.platosPropios.map((p) => p.t)), propios = guardados.filter((p) => nombresPropios.has(p.t)), delMenu = guardados.filter((p) => !nombresPropios.has(p.t));
-  const usar = (pl) => { nombre.value = pl.t; w.items.splice(0, w.items.length, ...clone(pl.items)); edit.redraw(); pintarTotal(); };
-  const reuse = h('select', { id: 'plato-reusar', 'aria-label': 'Usar un plato que ya tengo', onchange: (e) => {
-    const v = e.target.value; e.target.value = ''; if (!v) return;
-    if (v === '__gestionar__') { sheets.slice().forEach((x) => x.close()); go('ajustes'); irAj('platos'); return; }
-    const pl = guardados.find((p) => p.t === v); if (pl) usar(pl);
-  } }, h('option', { value: '' }, 'Usar uno que ya tengo…'), h('option', { value: '__gestionar__' }, 'Gestionar platos…'),
-    propios.length ? h('optgroup', { label: 'Mis platos' }, propios.map((p) => h('option', { value: p.t }, p.t))) : null, delMenu.length ? h('optgroup', { label: 'En tu menú' }, delMenu.map((p) => h('option', { value: p.t }, p.t))) : null);
+  const nombreEl = h('div', { class: 'plato-fijo', id: 'plato-nombre' }), btnElegir = h('button', { type: 'button', class: 'btn sec', id: 'plato-elegir', onclick: () => elegirPlato({ m, actual: w.t, onPick: (pl) => { w.t = pl.t; w.items.splice(0, w.items.length, ...clone(pl.items)); edit.redraw(); pintarTotal(); draw(); } }) });
+  const pintarNombre = () => { nombreEl.textContent = w.t || 'Ningún plato elegido'; nombreEl.classList.toggle('vacio', !w.t); btnElegir.textContent = w.t ? 'Cambiar plato' : 'Elegir plato'; };
   // Repetir en otros días de esta semana
   const rep = new Set([i]), repetir = h('div', { class: 'stack', style: 'gap:8px' });
   function pintarRep() {
@@ -338,16 +345,16 @@ function editPlato(semana, i, m) {
       h('p', { class: 'mute small', id: 'rep-nota' }, rep.size > 1 ? `Se pondrá igual en: ${L.diasTexto([...rep].filter((j) => j !== i)).toLowerCase()}. Lo que tuvieran esos días se sustituye.` : `Solo cambia el ${L.DIAS[i].toLowerCase()}.`));
   }
   function draw() {
-    cuerpo.replaceChildren(
+    pintarNombre(); cuerpo.replaceChildren(...[
       !esFija ? h('div', { class: 'row', style: 'padding:0;min-height:0' }, h('div', { class: 'grow' }, 'Comida libre', h('div', { class: 'sub' }, 'Sin ingredientes: cuenta con tus calorías de comida libre.')), swt(w.libre, () => { w.libre = !w.libre; draw(); }, 'Comida libre')) : null,
-      ...(w.libre ? [] : [reuse, field('Nombre del plato', nombre), h('div', { class: 'label' }, 'Ingredientes por persona'), edit, total]), repetir);
+      ...(w.libre ? [] : [h('div', { class: 'field' }, h('span', {}, 'Plato'), h('div', { class: 'plato-sel' }, nombreEl, btnElegir)), ...(w.t ? [h('div', { class: 'label' }, 'Ingredientes por persona'), edit, total] : [])]), repetir].filter(Boolean));
   }
   pintarRep(); draw(); pintarTotal();
   sheet({ title: `${L.DIAS[i]} · ${NOMBRE_COMIDA[m]}`, body: cuerpo,
     onSave: () => {
       let plato;
       if (w.libre && !esFija) plato = { t: 'Comida libre', libre: true, items: [] };
-      else { const t = nombre.value.trim(); if (!t) return 'Escribe el nombre del plato.'; plato = { t, items: w.items.filter((it) => it[1] > 0 && data.ingredientes[it[0]]) }; }
+      else { const t = w.t.trim(); if (!t) return 'Elige un plato.'; plato = { t, items: w.items.filter((it) => it[1] > 0 && data.ingredientes[it[0]]) }; }
       rep.forEach((j) => { semana[j][m] = clone(plato); }); commit();
       if (rep.size > 1) toast(`Guardado en ${rep.size} días.`);
     },
@@ -499,9 +506,17 @@ function slotEl(s, f, ahora, hecho) {
     s.progreso != null ? h('div', { class: 'bar', style: 'margin-top:8px' }, h('i', { style: `width:${Math.round(s.progreso * 100)}%` })) : null];
   return h('div', { class: 'slot' + (hecho ? ' hecho' : '') + (s.k === ahora ? ' ahora' : '') },
     h('span', { class: 'hora' }, s.hora),
-    s.accion ? h('button', { class: 'slot-main', id: 'slot-' + s.k, type: 'button', onclick: s.accion, 'aria-label': `${s.kind}: ${s.title}. Abrir` }, ...contenido)
+    s.accion ? h('button', { class: 'slot-main', id: 'slot-' + s.k, type: 'button', onclick: s.accion, 'aria-label': `${s.kind}: ${s.title}. ${s.aria || 'Abrir'}` }, ...contenido)
       : h('div', {}, ...contenido, s.extra || null),
     h('button', { class: 'chk', 'aria-pressed': String(hecho), 'aria-label': (hecho ? 'Desmarcar: ' : 'Marcar como hecho: ') + s.kind, onclick: () => toggleHecho(f, s.k) }, icon('check')));
+}
+/* Cambiar lo que comes hoy (solo hoy, el plan no se toca). */
+function cambiarComidaHoy(f, d, k) {
+  const nombre = NOMBRE_COMIDA[k], cambiado = !!L.cambioDe(data, f, k);
+  const poner = (pl) => { const r = diaReg(f); r.cambios = r.cambios || {}; r.cambios[k] = pl; commit(); };
+  elegirPlato({ titulo: `Hoy · ${nombre}`, m: k, actual: (L.platoDelDia(data, d, k) || {}).t, libre: !L.FIJAS.includes(k), onLibre: () => poner({ t: 'Comida libre', libre: true, items: [] }),
+    quitar: cambiado ? { texto: 'Volver al plan', sub: 'Quita el cambio de hoy', fn: () => { const r = diaReg(f); delete r.cambios[k]; if (!Object.keys(r.cambios).length) delete r.cambios; commit(); } } : null,
+    onPick: (x) => poner({ t: x.t, items: clone(x.items) }) });
 }
 /* Vista grande del entreno de hoy: se abre al tocar la tarjeta. Recuerda el último peso de cada ejercicio. */
 function abrirEntrenoHoy(f) {
@@ -580,9 +595,9 @@ function recordatorioCuenta() {
 }
 function viewHoy() {
   const d = L.hoy(), f = L.iso(d), dm = L.diaMenu(data, d), hechos = L.hechosDe(data, f), slots = [];
-  for (const [c, nombre] of L.FIJOS) { const fj = L.fijoDia(data, d, c); if (fj) slots.push({ k: c, hora: fj.hora, kind: nombre, title: fj.texto, det: itemsText(fj.items) }); }
-  for (const [m, nombre] of [['comida', 'Comida'], ['cena', 'Cena']]) {
-    const pl = dm && dm[m]; if (pl) slots.push({ k: m, hora: data.menu.horas[m], kind: nombre, title: pl.libre ? 'Comida libre' : pl.t, det: pl.libre ? 'Que lleve una ración clara de proteína.' : itemsText(pl.items) });
+  for (const [c, nombre] of [['desayuno', 'Desayuno'], ['media', 'Media mañana'], ['comida', 'Comida'], ['merienda', 'Merienda'], ['cena', 'Cena']]) {
+    const pl = L.platoDelDia(data, d, c); if (!pl) continue; const esF = L.FIJAS.includes(c);
+    slots.push({ k: c, hora: esF ? L.fijoOn(data, c).hora : data.menu.horas[c], kind: nombre + (pl.cambiado ? ' · cambiado' : ''), title: pl.libre ? 'Comida libre' : pl.t, det: pl.libre ? 'Que lleve una ración clara de proteína.' : itemsText(pl.items), accion: () => cambiarComidaHoy(f, d, c), aria: 'Cambiar lo que comes hoy' });
   }
   const ses = L.sesionDelDia(data, d);
   if (ses) { const reg = L.regGym(data, f), hechasEj = ses.ej.filter((e) => reg[L.slug(e.n)] && reg[L.slug(e.n)].hecho).length;
@@ -590,7 +605,7 @@ function viewHoy() {
   slots.sort((a, b) => L.minutos(a.hora) - L.minutos(b.hora));
   const now = new Date(), nm = now.getHours() * 60 + now.getMinutes(), sig = slots.find((s) => !hechos[s.k] && L.minutos(s.hora) >= nm - 60), hechas = slots.filter((s) => hechos[s.k]).length;
 
-  const t = L.totalDia(data, d), o = L.objetivo(data, d);
+  const t = L.totalDia(data, d), c = L.totalDia(data, d, { soloHechos: true }), o = L.objetivo(data, d);
   const metric = (label, v, goal, unit) => h('div', { class: 'metric' }, h('div', { class: 'top' }, h('span', { class: 'label' }, label), h('span', { class: 'mute small num' }, `objetivo ${L.miles(goal)} ${unit}`)),
     h('b', { class: 'num' }, `${L.miles(v)} ${unit}`), h('div', { class: 'bar' + (goal && v >= goal ? ' ok' : '') }, h('i', { style: `width:${goal ? Math.min(100, v / goal * 100) : 0}%` })));
   const cs = L.comidasDelDia(data), total = cs.length;
@@ -603,10 +618,10 @@ function viewHoy() {
     avisoInstalar(), recordatorioCuenta(),
     h('div', { class: 'cols' },
       h('div', { class: 'stack' }, slots.length ? h('div', { class: 'group' }, slots.map((s) => slotEl(s, f, sig && sig.k, !!hechos[s.k]))) :
-        h('div', { class: 'card empty' }, h('p', {}, 'Hoy no tienes nada en el plan.'), h('button', { class: 'btn', onclick: () => go('semana') }, 'Preparar el menú')), barraEntreno(d, f), extrasCard(f)),
+        h('div', { class: 'card empty' }, h('p', {}, 'Hoy no tienes nada en el plan.'), h('button', { class: 'btn', onclick: () => go('semana') }, 'Preparar el menú')), slots.length ? h('p', { class: 'mute small', style: 'padding:0 4px' }, 'Toca una comida si hoy has comido otra cosa.') : null, barraEntreno(d, f), extrasCard(f)),
       h('div', { class: 'stack' },
-        t ? h('section', { class: 'card' }, h('h2', { class: 'sec' }, 'Nutrición'), metric('Proteína', t.p, o.prot, 'g'), metric('Energía', t.k, o.kcal, 'kcal'), macroBar(t),
-          h('p', { class: 'mute small' }, 'Estimación según lo planeado' + (t.extras ? ` más ${L.miles(t.extras)} kcal de extras` : '') + (t.libre ? `; cuenta unas ${L.miles(data.perfil.libre.kcal)} kcal por la comida libre.` : '.'))) : null,
+        t ? h('section', { class: 'card', id: 'nutricion' }, h('h2', { class: 'sec' }, 'Nutrición'), metric('Proteína', c.p, o.prot, 'g'), metric('Energía', c.k, o.kcal, 'kcal'), c.k > 0 ? macroBar(c) : null,
+          h('p', { class: 'mute small', id: 'nutricion-nota' }, c.k > 0 ? `Suma lo que has marcado como hecho${c.extras ? `, con ${L.miles(c.extras)} kcal de extras` : ''}. ` : 'Se irá completando según marques las comidas como hechas. ', t.k > c.k ? `Faltan ${L.miles(t.k - c.k)} kcal de lo previsto hoy.` : '')) : null,
         h('section', { class: 'card' }, h('h2', { class: 'sec' }, 'Progreso'),
           h('div', { class: 'metric' }, h('div', { class: 'top' }, h('span', { class: 'label' }, 'Hecho hoy'), h('span', { class: 'num mute small' }, `${hechas} de ${slots.length}`)), h('div', { class: 'bar' }, h('i', { style: `width:${slots.length ? hechas / slots.length * 100 : 0}%` }))),
           h('div', { class: 'label' }, 'Comidas de los últimos 7 días'), h('div', { class: 'week7' }, siete),
@@ -628,7 +643,7 @@ function fijaBtn(semana, i, c, d) {
 }
 function viewSemana() {
   const lun = L.addDays(L.lunesDe(L.hoy()), S.semSel * 7), w = L.semanaIdx(data, lun), semana = data.menu.semanas[w], fh = L.iso(L.hoy()), n = data.menu.semanas.length;
-  const dias = semana.map((_, i) => { const d = L.addDays(lun, i); return { d, i, t: L.totalDia(data, d, { extras: false }), o: L.objetivo(data, d) }; });
+  const dias = semana.map((_, i) => { const d = L.addDays(lun, i); return { d, i, t: L.totalDia(data, d, { extras: false, cambios: false }), o: L.objetivo(data, d) }; });
   const conPlan = dias.filter((x) => x.t && x.t.k > 0), media = conPlan.length ? { k: conPlan.reduce((a, x) => a + x.t.k, 0) / conPlan.length, p: conPlan.reduce((a, x) => a + x.t.p, 0) / conPlan.length } : null;
   return h('div', { class: 'page' },
     h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, 'Menú'), h('p', { class: 'subtitle' }, n > 1 ? `Semana ${w + 1} de ${n} del ciclo` : 'Se repite cada semana')),
