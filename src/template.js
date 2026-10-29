@@ -1,5 +1,5 @@
 // Plan de ejemplo para quien empieza, y estructura vacía.
-import { iso, lunesDe, hoy } from './logic.js';
+import { iso, lunesDe, hoy, SECC } from './logic.js';
 import { buscarPorNombre } from './alimentos.js';
 
 // Ingrediente de la base de alimentos, listo para guardar en el plan
@@ -11,7 +11,7 @@ const ej = (n, s, c = false) => ({ n, s, c });
 export function emptyData() {
   return {
     version: 1,
-    perfil: { listo: false, nombre: '', ciudad: '', personas: 1, objetivos: { gym: { kcal: 2400, prot: 140 }, sin: { kcal: 2100, prot: 130 } }, libre: { kcal: 800, prot: 35 } },
+    perfil: { listo: false, nombre: '', personas: 1, objetivos: { gym: { kcal: 2400, prot: 140 }, sin: { kcal: 2100, prot: 130 } }, libre: { kcal: 800, prot: 35 } },
     ingredientes: {},
     menu: { ancla: iso(lunesDe(hoy())), horas: { comida: '14:30', cena: '21:00' }, fijos: {
       desayuno: { on: true, hora: '08:00', texto: 'Desayuno', items: [] },
@@ -19,7 +19,7 @@ export function emptyData() {
       merienda: { on: false, hora: '17:30', texto: 'Merienda', items: [] } },
       semanas: [Array.from({ length: 7 }, () => ({ comida: null, cena: null }))] },
     entreno: { hora: '18:30', sesiones: [] },
-    dias: {}, compra: {}, agenda: {}, clima: null,
+    dias: {}, compra: {}, extrasCompra: [],
   };
 }
 
@@ -69,6 +69,9 @@ export function normalize(raw) {
   for (const g of Object.values(out.ingredientes || {})) {          // datos de versiones anteriores: añade hidratos y grasa si el alimento está en la base
     if (g && g.c == null && g.f == null) { const b = buscarPorNombre(g.n); if (b && b.u === g.u) { g.c = b.c; g.f = b.f; } }
   }
-  for (const k of ['ingredientes', 'dias', 'compra', 'agenda']) if (!out[k] || typeof out[k] !== 'object') out[k] = {};
+  for (const k of ['ingredientes', 'dias', 'compra']) if (!out[k] || typeof out[k] !== 'object') out[k] = {};
+  delete out.agenda; delete out.clima; if (out.perfil) delete out.perfil.ciudad;                 // versiones anteriores: tiempo y recordatorios ya no existen
+  out.extrasCompra = (Array.isArray(out.extrasCompra) ? out.extrasCompra : []).filter((x) => x && typeof x.n === 'string' && x.n.trim())
+    .map((x, i) => ({ id: String(x.id || 'x' + i), n: x.n.trim(), q: String(x.q || ''), s: SECC.some(([v]) => v === x.s) ? x.s : 'otros', ok: !!x.ok }));
   return out;
 }

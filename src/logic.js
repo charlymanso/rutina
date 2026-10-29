@@ -1,7 +1,7 @@
 // Lógica pura del plan (sin DOM): fechas, kcal/proteína, lista de la compra.
 export const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 export const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-export const SECC = [['carne', 'Carne y charcutería'], ['pescado', 'Pescadería'], ['verdura', 'Fruta y verdura'], ['lacteos', 'Huevos, lácteos y refrigerados'], ['despensa', 'Despensa'], ['pan', 'Panadería'], ['congelados', 'Congelados']];
+export const SECC = [['carne', 'Carne y charcutería'], ['pescado', 'Pescadería'], ['verdura', 'Fruta y verdura'], ['lacteos', 'Huevos, lácteos y refrigerados'], ['despensa', 'Despensa'], ['pan', 'Panadería'], ['congelados', 'Congelados'], ['otros', 'Otros']];
 export const FIJOS = [['desayuno', 'Desayuno'], ['media', 'Media mañana'], ['merienda', 'Merienda']];
 
 export const pad = (n) => String(n).padStart(2, '0');
@@ -136,10 +136,11 @@ export const claveCompra = (sel, desde = hoy()) => (sel === 2 ? `dos-${iso(lunes
 export function textoCompra(data, sel) {
   const tot = listaCompra(data, sel), ids = Object.keys(tot), out = [];
   for (const [sc, nombre] of SECC) {
-    const its = ids.filter((i) => ing(data, i).s === sc).sort((a, b) => ing(data, a).n.localeCompare(ing(data, b).n, 'es'));
-    if (!its.length) continue;
+    const its = ids.filter((i) => ing(data, i).s === sc).sort((a, b) => ing(data, a).n.localeCompare(ing(data, b).n, 'es')), xs = (data.extrasCompra || []).filter((x) => x.s === sc);
+    if (!its.length && !xs.length) continue;
     out.push(nombre.toUpperCase());
     its.forEach((i) => out.push(`- ${ing(data, i).n}: ${cantidadCompra(data, i, tot[i])}`));
+    xs.forEach((x) => out.push(`- ${x.n}${x.q ? ': ' + x.q : ''}`));
     out.push('');
   }
   return out.join('\n').trim();

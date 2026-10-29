@@ -1,6 +1,5 @@
 import * as L from './logic.js';
 import { makeTemplate, emptyData, normalize } from './template.js';
-import { cargarClima } from './weather.js';
 import { store } from './store.js';
 import { BASE, buscarLocal, normalizar } from './alimentos.js';
 import { buscarOnline, porCodigo, esCodigoDeBarras } from './off.js';
@@ -403,26 +402,20 @@ function barraEntreno(d, f) {
     h('button', { class: 'btn plain', id: 'cambiar-entreno', onclick: () => (ses ? cambiarEntrenoDia(f) : anadirEntrenoHoy(f)) }, ses ? 'Cambiar entreno' : 'Añadir entreno'));
 }
 
-function addAgenda(f) {
-  const hora = h('input', { type: 'time', value: '09:00' }), t = h('input', { type: 'text', placeholder: 'Ej. Dentista' });
-  sheet({ title: 'Nuevo recordatorio', body: [field('Qué', t), field('Hora', hora)], save: 'Añadir',
-    onSave: () => { if (!t.value.trim()) return 'Escribe qué tienes que hacer.'; (data.agenda[f] ||= []).push({ hora: hora.value, titulo: t.value.trim() }); commit(); } });
-}
-
 function bienvenida() {
   if (S.bienvenida && sheets.includes(S.bienvenida)) return;   // ya está abierta
   const T = makeTemplate();
-  const nombre = h('input', { type: 'text', placeholder: 'Tu nombre' }), ciudad = h('input', { type: 'text', placeholder: 'Para ver el tiempo (opcional)' });
+  const nombre = h('input', { type: 'text', placeholder: 'Tu nombre' });
   const kcal = h('input', { type: 'number', value: String(T.perfil.objetivos.gym.kcal) }), prot = h('input', { type: 'number', value: String(T.perfil.objetivos.gym.prot) });
   let calcR = null, cuerpoR = null;
   const aplicar = (base) => {
     const k = Math.max(0, num(kcal.value)), p = Math.max(0, num(prot.value));
-    data = base; data.perfil = { ...data.perfil, listo: true, nombre: nombre.value.trim(), ciudad: ciudad.value.trim(), objetivos: calcR ? { gym: { kcal: calcR.gym, prot: calcR.prot }, sin: { kcal: calcR.sin, prot: calcR.prot } } : { gym: { kcal: k, prot: p }, sin: { kcal: Math.round(k * 0.92), prot: p } }, ...(cuerpoR ? { cuerpo: cuerpoR } : {}) };
-    sheets.slice().forEach((s) => s.close()); commit(); refreshClima();
+    data = base; data.perfil = { ...data.perfil, listo: true, nombre: nombre.value.trim(), objetivos: calcR ? { gym: { kcal: calcR.gym, prot: calcR.prot }, sin: { kcal: calcR.sin, prot: calcR.prot } } : { gym: { kcal: k, prot: p }, sin: { kcal: Math.round(k * 0.92), prot: p } }, ...(cuerpoR ? { cuerpo: cuerpoR } : {}) };
+    sheets.slice().forEach((s) => s.close()); commit();
   };
   S.bienvenida = sheet({ title: 'Bienvenido a Rutina', dismissible: false,
     body: [h('div', { class: 'hero' }, h('div', { class: 'big' }, 'Tu día, claro y a tu ritmo'), h('p', { class: 'mute' }, 'Comidas, compra y entrenos en un solo sitio. Todo se guarda en este ordenador.')),
-      field('¿Cómo te llamas?', nombre), field('Ciudad', ciudad), h('div', { class: 'pair' }, field('Calorías al día', kcal), field('Proteína al día (g)', prot)),
+      field('¿Cómo te llamas?', nombre), h('div', { class: 'pair' }, field('Calorías al día', kcal), field('Proteína al día (g)', prot)),
       h('button', { class: 'btn plain', id: 'bienv-calc', style: 'align-self:flex-start;padding-left:0', onclick: () => abrirObjetivo({ guardar: false, onApply: (r, cuerpo) => { kcal.value = String(r.gym); prot.value = String(r.prot); calcR = r; cuerpoR = cuerpo; } }) }, 'Calcular mis objetivos por mí'),
       h('p', { class: 'mute small' }, 'Son solo una referencia. Puedes cambiarlos cuando quieras en Ajustes.'),
       h('button', { class: 'btn wide', onclick: () => aplicar(makeTemplate()) }, 'Empezar con un plan de ejemplo'),
@@ -434,11 +427,6 @@ function bienvenida() {
 function diaReg(f) { return (data.dias[f] ||= { hechos: {} }); }
 function toggleHecho(f, k) { const d = diaReg(f); d.hechos = d.hechos || {}; if (d.hechos[k]) delete d.hechos[k]; else d.hechos[k] = true; commit(); }
 function setEj(f, k, patch) { const d = diaReg(f); d.gym = d.gym || {}; d.gym[k] = { ...(d.gym[k] || {}), ...patch }; commit(); }
-async function refreshClima() {
-  const c = await cargarClima(data);
-  if (c && JSON.stringify(c) !== JSON.stringify(data.clima)) { data.clima = c; guardarLocal(); }
-}
-
 
 /* ---------- extras (comida fuera del plan) ---------- */
 function anadirExtra(f) {
@@ -536,20 +524,6 @@ function abrirEntrenoHoy(f) {
   S.entrenoGrande = pintar; pintar();
 }
 
-function resumenCard(f) {
-  const c = data.clima, ag = (data.agenda[f] || []).map((a, i) => ({ ...a, i })).sort((a, b) => L.minutos(a.hora) - L.minutos(b.hora));
-  let tiempo;
-  if (!data.perfil.ciudad) tiempo = h('p', { class: 'mute small' }, 'Añade tu ciudad en Ajustes para ver el tiempo de hoy.');
-  else if (!c) tiempo = h('p', { class: 'mute small' }, 'El tiempo aparecerá cuando haya conexión.');
-  else if (c.error) tiempo = h('p', { class: 'mute small' }, c.error);
-  else tiempo = h('div', {}, h('div', { class: 'label' }, `Tiempo en ${c.lugar || c.ciudad}`), h('div', { class: 'weather' }, h('b', { class: 'num' }, `${c.max}°`), h('span', {}, c.texto), h('span', { class: 'mute num' }, `mín. ${c.min}° · lluvia ${c.lluvia ?? 0} %`)));
-  return h('section', { class: 'card' }, h('h2', { class: 'sec' }, 'Resumen'), tiempo,
-    h('div', {}, h('div', { class: 'label', style: 'margin-bottom:6px' }, 'Agenda de hoy'),
-      ag.length ? ag.map((a) => h('div', { class: 'row', style: 'padding:8px 0;min-height:0' }, h('span', { class: 'num mute', style: 'width:3.4rem' }, a.hora), h('span', { class: 'grow' }, a.titulo),
-        h('button', { class: 'chev', 'aria-label': 'Quitar ' + a.titulo, onclick: () => { data.agenda[f].splice(a.i, 1); commit(); } }, '×'))) : h('p', { class: 'mute small' }, 'Nada apuntado para hoy.'),
-      h('button', { class: 'btn plain', style: 'padding-left:0', onclick: () => addAgenda(f) }, '+ Añadir recordatorio')));
-}
-
 function saludo() {
   const hr = new Date().getHours(), t = hr < 6 ? 'Buenas noches' : hr < 14 ? 'Buenos días' : hr < 21 ? 'Buenas tardes' : 'Buenas noches';
   return data.perfil.nombre ? `${t}, ${data.perfil.nombre}` : t;
@@ -596,7 +570,7 @@ function viewHoy() {
     h('div', { class: 'cols' },
       h('div', { class: 'stack' }, slots.length ? h('div', { class: 'group' }, slots.map((s) => slotEl(s, f, sig && sig.k, !!hechos[s.k]))) :
         h('div', { class: 'card empty' }, h('p', {}, 'Hoy no tienes nada en el plan.'), h('button', { class: 'btn', onclick: () => go('semana') }, 'Preparar el menú')), barraEntreno(d, f), extrasCard(f)),
-      h('div', { class: 'stack' }, resumenCard(f),
+      h('div', { class: 'stack' },
         t ? h('section', { class: 'card' }, h('h2', { class: 'sec' }, 'Nutrición'), metric('Proteína', t.p, o.prot, 'g'), metric('Energía', t.k, o.kcal, 'kcal'), macroBar(t),
           h('p', { class: 'mute small' }, 'Estimación según lo planeado' + (t.extras ? ` más ${L.miles(t.extras)} kcal de extras` : '') + (t.libre ? `; cuenta unas ${L.miles(data.perfil.libre.kcal)} kcal por la comida libre.` : '.'))) : null,
         h('section', { class: 'card' }, h('h2', { class: 'sec' }, 'Progreso'),
@@ -635,26 +609,40 @@ function viewSemana() {
         L.FIJAS.some((c) => L.fijoOn(data, c)) ? h('div', { class: 'fijas' }, L.FIJAS.filter((c) => L.fijoOn(data, c)).map((c) => fijaBtn(semana, i, c, d))) : null); })));
 }
 
+function anadirCompra() {
+  const nom = h('input', { type: 'text', id: 'compra-nombre', placeholder: 'Ej. Papel de cocina', autocomplete: 'off' }), cant = h('input', { type: 'text', id: 'compra-cant', placeholder: 'Opcional, ej. 2 packs' });
+  let sec = 'despensa';
+  const chips = h('div', { class: 'chips', id: 'compra-secc', role: 'group', 'aria-label': 'Sección del súper' }), pintar = () => chips.replaceChildren(...L.SECC.map(([v, t]) => h('button', { type: 'button', class: 'chipopt', id: 'compra-s-' + v, 'aria-pressed': String(sec === v), onclick: () => { sec = v; pintar(); } }, t)));
+  pintar();
+  sheet({ title: 'Añadir a la lista', body: [field('Qué necesitas', nom), field('Cantidad', cant), h('div', { class: 'field' }, h('span', {}, 'Sección'), chips), h('p', { class: 'mute small' }, 'Se queda en la lista hasta que la quites, aunque cambie la semana.')], save: 'Añadir',
+    onSave: () => { const n = nom.value.trim(); if (!n) return 'Escribe qué quieres añadir.'; data.extrasCompra.push({ id: 'x' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), n, q: cant.value.trim(), s: sec, ok: false }); commit(); } });
+  setTimeout(() => nom.focus(), 50);
+}
+
 function viewCompra() {
-  const k = L.claveCompra(S.compSel), marc = (data.compra[k] && data.compra[k].marcados) || {}, tot = L.listaCompra(data, S.compSel), ids = Object.keys(tot), hechos = ids.filter((i) => marc[i]).length;
+  const k = L.claveCompra(S.compSel), marc = (data.compra[k] && data.compra[k].marcados) || {}, tot = L.listaCompra(data, S.compSel), ids = Object.keys(tot), ex = data.extrasCompra, total = ids.length + ex.length, hechos = ids.filter((i) => marc[i]).length + ex.filter((x) => x.ok).length;
   const copiar = async () => {
     const txt = L.textoCompra(data, S.compSel);
     try { await navigator.clipboard.writeText(txt); toast('Lista copiada.'); } catch { const ta = h('textarea', { style: 'position:fixed;opacity:0' }); ta.value = txt; document.body.append(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); toast(ok ? 'Lista copiada.' : 'No se pudo copiar.'); }
   };
   const secciones = L.SECC.map(([sc, nombre]) => {
-    const its = ids.filter((i) => L.ing(data, i).s === sc).sort((a, b) => L.ing(data, a).n.localeCompare(L.ing(data, b).n, 'es')); if (!its.length) return null;
+    const its = ids.filter((i) => L.ing(data, i).s === sc).sort((a, b) => L.ing(data, a).n.localeCompare(L.ing(data, b).n, 'es')), xs = ex.filter((x) => x.s === sc); if (!its.length && !xs.length) return null;
     return h('section', { class: 'stack', style: 'gap:8px' }, h('h2', { class: 'sec', style: 'font-size:17px' }, nombre),
       h('div', { class: 'group' }, its.map((i) => h('button', { class: 'item', 'aria-pressed': String(!!marc[i]), onclick: () => { const c = (data.compra[k] ||= { marcados: {} }); if (c.marcados[i]) delete c.marcados[i]; else c.marcados[i] = true; commit(); } },
-        h('span', { class: 'box', 'aria-hidden': 'true', 'aria-pressed': String(!!marc[i]) }, icon('check')), h('span', { class: 'nm' }, L.ing(data, i).n), h('span', { class: 'q' }, L.cantidadCompra(data, i, tot[i]))))));
+        h('span', { class: 'box', 'aria-hidden': 'true', 'aria-pressed': String(!!marc[i]) }, icon('check')), h('span', { class: 'nm' }, L.ing(data, i).n), h('span', { class: 'q' }, L.cantidadCompra(data, i, tot[i])))),
+        xs.map((x) => h('div', { class: 'xrow' }, h('button', { class: 'item extra', 'aria-pressed': String(!!x.ok), onclick: () => { x.ok = !x.ok; commit(); } },
+          h('span', { class: 'box', 'aria-hidden': 'true', 'aria-pressed': String(!!x.ok) }, icon('check')), h('span', { class: 'nm' }, x.n, h('span', { class: 'tag' }, 'Extra')), h('span', { class: 'q' }, x.q || '')),
+          h('button', { class: 'chev xdel', 'aria-label': 'Quitar ' + x.n, onclick: () => { data.extrasCompra = data.extrasCompra.filter((y) => y !== x); commit(); } }, '×')))));
   }).filter(Boolean);
   return h('div', { class: 'page' },
-    h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, 'Compra'), h('p', { class: 'subtitle num' }, `${hechos} de ${ids.length} en el carro`)),
+    h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, 'Compra'), h('p', { class: 'subtitle num' }, `${hechos} de ${total} en el carro`)),
       seg([[2, 'Dos semanas'], [0, 'Esta semana'], [1, 'La que viene']], S.compSel, (v) => { S.compSel = v; render(); })),
     h('div', { class: 'head' }, h('div', { class: 'row', style: 'padding:0;min-height:0;gap:10px' }, h('span', { class: 'mute' }, 'Para'), h('div', { class: 'stepper' },
       h('button', { 'aria-label': 'Menos personas', onclick: () => { data.perfil.personas = Math.max(1, (data.perfil.personas || 1) - 1); commit(); } }, '−'), h('span', { class: 'num' }, String(data.perfil.personas || 1)),
       h('button', { 'aria-label': 'Más personas', onclick: () => { data.perfil.personas = Math.min(12, (data.perfil.personas || 1) + 1); commit(); } }, '+')), h('span', { class: 'mute' }, (data.perfil.personas || 1) === 1 ? 'persona' : 'personas')),
-      h('div', {}, h('button', { class: 'btn sec', onclick: copiar, disabled: !ids.length }, 'Copiar lista'), ' ', h('button', { class: 'btn plain', onclick: () => { data.compra[k] = { marcados: {} }; commit(); }, disabled: !hechos }, 'Desmarcar todo'))),
-    ids.length ? h('div', { class: 'shop' }, secciones) : h('div', { class: 'card empty' }, h('p', {}, 'Tu lista aparecerá aquí cuando añadas platos al menú.'), h('button', { class: 'btn', onclick: () => go('semana') }, 'Ir al menú')));
+      h('div', {}, h('button', { class: 'btn sec', onclick: copiar, disabled: !total }, 'Copiar lista'), ' ', h('button', { class: 'btn plain', onclick: () => { data.compra[k] = { marcados: {} }; data.extrasCompra.forEach((x) => { x.ok = false; }); commit(); }, disabled: !hechos }, 'Desmarcar todo'))),
+    h('button', { class: 'btn sec', id: 'add-compra', style: 'align-self:flex-start', onclick: anadirCompra }, '+ Añadir a la lista'),
+    total ? h('div', { class: 'shop' }, secciones) : h('div', { class: 'card empty' }, h('p', {}, 'Tu lista aparecerá aquí cuando añadas platos al menú o cosas por tu cuenta.'), h('button', { class: 'btn', onclick: () => go('semana') }, 'Ir al menú')));
 }
 
 function viewEntreno() {
@@ -685,7 +673,6 @@ function viewAjustes() {
     case 'cuenta': return subpagina('Cuenta', 'Sincroniza tu plan entre tus dispositivos', cuentaGrupo());
     case 'perfil': return subpagina('Perfil', null,
       grupo(null, rowOf('Nombre', txtAj(p.nombre, (v) => { p.nombre = v; commit(); }, 'Tu nombre')),
-        rowOf('Ciudad', txtAj(p.ciudad, (v) => { p.ciudad = v; data.clima = null; commit(); refreshClima(); }, 'Para el tiempo'), 'Se usa solo para consultar el tiempo.'),
         rowOf('Personas en casa', h('div', { class: 'stepper' }, h('button', { 'aria-label': 'Menos', onclick: () => { p.personas = Math.max(1, (p.personas || 1) - 1); commit(); } }, '−'), h('span', { class: 'num' }, String(p.personas || 1)), h('button', { 'aria-label': 'Más', onclick: () => { p.personas = Math.min(12, (p.personas || 1) + 1); commit(); } }, '+')), 'Multiplica las cantidades de la lista de la compra.')));
     case 'objetivos': return subpagina('Objetivos diarios', 'Tus calorías y tu proteína',
       h('div', { class: 'card', style: 'gap:10px' }, h('div', {}, h('b', {}, 'Calcúlalos por ti'), h('p', { class: 'mute small' }, 'A partir de tu edad, peso, altura y actividad, con las mismas fórmulas que Macrómetro.')), h('button', { class: 'btn', id: 'calcular-objetivos', style: 'align-self:flex-start', onclick: () => abrirObjetivo() }, 'Calcular mis objetivos')),
@@ -918,7 +905,6 @@ document.addEventListener('keydown', (e) => {
   if (window.rutina && window.rutina.version) window.rutina.version().then((v) => { S.version = v; });
   render();
   if (!data.perfil.listo && !mostrarInicio()) bienvenida();
-  refreshClima();
   if (Nube.nubeActiva()) {
     Sync.init({ getData: () => data, setData: (d) => { data = d; if (S.bienvenida) { S.bienvenida.close(); S.bienvenida = null; } }, guardar: () => store.save(data), render, onConflicto: conflictoSheet,
       onEstado: (e) => { S.nube = { ...(S.nube || {}), ...e }; const el = document.getElementById('estado-nube'); if (el) el.textContent = textoEstado(); },
