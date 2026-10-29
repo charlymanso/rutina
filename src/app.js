@@ -689,7 +689,7 @@ function avisoInstalar() {
   if (!ios && !S.instalarEvento) return null;
   const ocultar = h('button', { class: 'btn plain', 'aria-label': 'Ocultar este aviso', onclick: () => { try { localStorage.setItem('rutina-ocultar-instalar', '1'); } catch { /* sin almacenamiento */ } S.instalarOculto = true; render(); } }, '✕');
   if (S.instalarOculto) return null;
-  return ios ? h('div', { class: 'banner', id: 'aviso-instalar', role: 'note' }, h('span', { class: 'grow' }, 'Instala Rutina: toca ', h('b', {}, 'Compartir'), ' (el cuadrado con la flecha) y elige ', h('b', {}, '«Añadir a pantalla de inicio»'), '.'), ocultar)
+  return ios ? h('div', { class: 'banner', id: 'aviso-instalar', role: 'note' }, h('span', { class: 'grow' }, 'Instala Rutina: toca ', h('b', {}, 'Compartir'), ' y elige ', h('b', {}, '«Añadir a pantalla de inicio»'), '.'), ocultar)
     : h('div', { class: 'banner', id: 'aviso-instalar', role: 'note' }, h('span', { class: 'grow' }, 'Instala Rutina en tu dispositivo para usarla como una app.'), h('button', { class: 'btn', onclick: async () => { S.instalarEvento.prompt(); await S.instalarEvento.userChoice; S.instalarEvento = null; render(); } }, 'Instalar'), ocultar);
 }
 function recordatorioCuenta() {
