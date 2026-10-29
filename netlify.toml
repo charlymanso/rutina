@@ -4,6 +4,8 @@
   # base = "site": así Netlify no intenta instalar las dependencias de Electron (no hacen falta para la web)
   base = "site"
   publish = "."
+  # Construir siempre: con "base" definido, Netlify se saltaría los cambios que solo tocan src/ (la app), que está fuera de site/
+  ignore = "exit 1"
   command = "mkdir -p app && cp -r ../src/. app/ && rm -f app/package.json && sed -i \"s/__BUILD__/$(echo $COMMIT_REF | cut -c1-8)/\" app/sw.js"
 
 # El service worker y la página de inicio nunca se guardan en caché, para que cada versión nueva llegue al momento.
