@@ -128,4 +128,42 @@ assert.equal(L.esVersionNueva('0.1.4', 'v0.1.4'), false);
 assert.equal(L.esVersionNueva('0.2.0', 'v0.1.9'), false);
 assert.equal(L.esVersionNueva('0.9.9', 'v1.0.0'), true);
 assert.equal(L.esVersionNueva('0.1.10', 'v0.1.9'), false);
+
+// ---- cambios de un día, nutrición consumida, ejercicios de hoy y extras de la compra ----
+{
+  const t = makeTemplate(); t.menu.ancla = '2026-10-26'; const mar = L.parseISO('2026-10-27'), fm = L.iso(mar), plan = L.platoDelDia(t, mar, 'comida');
+  assert.ok(plan && plan.items.length, 'hay plato de comida en el plan');
+  const previsto = L.totalDia(t, mar, { extras: false }), nada = L.totalDia(t, mar, { soloHechos: true });
+  assert.equal(nada.k, 0, 'sin marcar nada no se ha consumido nada');
+  t.dias[fm] = { hechos: { comida: true } };
+  const comida = L.sumaItems(t, plan.items), solo = L.totalDia(t, mar, { soloHechos: true });
+  assert.equal(Math.round(solo.k), Math.round(comida.k), 'solo cuenta la comida marcada');
+  t.dias[fm].extras = [{ n: 'Nueces', q: 20, u: 'g', k: 130, p: 3, c: 3, f: 13 }];
+  assert.equal(Math.round(L.totalDia(t, mar, { soloHechos: true }).k), Math.round(comida.k + 130), 'los extras cuentan como consumidos');
+  t.dias[fm].cambios = { comida: { t: 'Otra cosa', items: plan.items.map(([id, q]) => [id, q / 2]) } };
+  assert.equal(L.platoDelDia(t, mar, 'comida').cambiado, true);
+  assert.equal(L.platoDelDia(t, mar, 'comida', { cambios: false }).t, plan.t, 'el plan no se toca');
+  assert.ok(Math.abs(L.totalDia(t, mar, { soloHechos: true }).k - (comida.k / 2 + 130)) < 1, 'con el cambio cuenta lo que comiste de verdad');
+  assert.equal(Math.round(L.totalDia(t, mar, { extras: false, cambios: false }).k), Math.round(previsto.k), 'el menú ignora los cambios del día');
+  t.dias[fm].cambios = { comida: { t: 'Comida libre', libre: true, items: [] } };
+  assert.equal(L.totalDia(t, mar, { soloHechos: true, extras: false }).k, t.perfil.libre.kcal, 'comida libre cuenta sus kcal');
+  assert.equal(L.platoDelDia(t, mar, 'desayuno').t, t.menu.fijos.desayuno.texto);
+  t.menu.fijos.desayuno.on = false; assert.equal(L.platoDelDia(t, mar, 'desayuno'), null, 'un desayuno apagado no existe');
+  // ejercicios de hoy
+  const ses = L.sesionDelDia(t, L.parseISO('2026-10-26')), lunes = L.parseISO('2026-10-26'), fl = L.iso(lunes), n0 = ses.ej.length;
+  assert.equal(L.ejerciciosDelDia(t, lunes).length, n0);
+  t.dias[fl] = { hechos: {}, ejExtra: [{ n: 'Fondos', s: '4×12', c: true }], ejQuitar: [L.slug(ses.ej[0].n)] };
+  const ej = L.ejerciciosDelDia(t, lunes); assert.equal(ej.length, n0, 'uno quitado y uno añadido'); assert.equal(ej[ej.length - 1].extra, true); assert.ok(!ej.some((e) => L.slug(e.n) === L.slug(ses.ej[0].n)));
+  assert.equal(ses.ej.length, n0, 'la sesión del plan no se modifica');
+  // extras de la compra
+  const c = makeTemplate(); c.extrasCompra = [{ id: 'x1', n: 'Papel de cocina', q: '2 packs', s: 'otros', ok: false }, { id: 'x2', n: 'Pollo extra', q: '', s: 'carne', ok: false }];
+  const txt = L.textoCompra(c, 2); assert.ok(txt.includes('OTROS') && txt.includes('- Papel de cocina: 2 packs') && txt.includes('- Pollo extra'), 'copiar lista incluye extras');
+  // normalize arregla formas raras
+  const roto = normalize({ perfil: { listo: true }, dias: { '2026-10-27': { cambios: 5, ejExtra: 'x', ejQuitar: {}, extras: 3 }, '2026-10-28': null, '2026-10-29': { cambios: { comida: { t: 'A', items: 'mal' }, cena: null } } }, extrasCompra: [null, { n: ' ', s: 'x' }, { n: 'Sal', s: 'inventada' }], platosPropios: [{ t: 'Bowl', items: [['arroz', 80], null] }, { t: '', items: [] }, 'x'] });
+  assert.deepEqual(roto.dias['2026-10-27'], {}, 'campos de día con forma rara se descartan');
+  assert.deepEqual(roto.dias['2026-10-28'], { hechos: {} }); assert.deepEqual(roto.dias['2026-10-29'].cambios, { comida: { t: 'A', items: [] } });
+  assert.equal(roto.extrasCompra.length, 1); assert.equal(roto.extrasCompra[0].s, 'otros');
+  assert.deepEqual(roto.platosPropios, [{ t: 'Bowl', items: [['arroz', 80]] }]);
+  assert.ok(!('agenda' in normalize({ agenda: { x: 1 }, clima: {} })) && !('clima' in normalize({ clima: {} })), 'tiempo y recordatorios antiguos se limpian');
+}
 console.log('OK: logic tests');

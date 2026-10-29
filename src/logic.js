@@ -2,7 +2,6 @@
 export const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 export const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 export const SECC = [['carne', 'Carne y charcutería'], ['pescado', 'Pescadería'], ['verdura', 'Fruta y verdura'], ['lacteos', 'Huevos, lácteos y refrigerados'], ['despensa', 'Despensa'], ['pan', 'Panadería'], ['congelados', 'Congelados'], ['otros', 'Otros']];
-export const FIJOS = [['desayuno', 'Desayuno'], ['media', 'Media mañana'], ['merienda', 'Merienda']];
 
 export const pad = (n) => String(n).padStart(2, '0');
 export const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;

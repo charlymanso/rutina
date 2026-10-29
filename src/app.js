@@ -38,7 +38,7 @@ const ICONS = {
   ingredientes: [['path', { d: 'M4.5 11h15l-1.6 8a2 2 0 0 1-2 1.6H8.1a2 2 0 0 1-2-1.6L4.5 11z' }], ['path', { d: 'M8 11c0-3 1.6-5 4-5s4 2 4 5' }]],
   datos: [['ellipse', { cx: 12, cy: 6, rx: 7, ry: 3 }], ['path', { d: 'M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6' }]],
   barcode: [['path', { d: 'M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M8 9v6M11 9v6M14 9v6M17 9v6' }]],
-  platos: [['circle', { cx: 12, cy: 12, r: 8.5 }], ['circle', { cx: 12, cy: 12, r: 4.5 }]],
+  platos: [['path', { d: 'M6 3v6a2 2 0 0 0 4 0V3M8 3v18M17 21V3c-2 1-3.5 3.5-3.5 7 0 1.5 1 2.5 3.5 2.5' }]],
   acerca: [['circle', { cx: 12, cy: 12, r: 9 }], ['path', { d: 'M12 11v5.5' }], ['circle', { cx: 12, cy: 7.8, r: .7 }]],
 };
 function icon(name) {
@@ -61,9 +61,15 @@ function commit() {
 function guardarLocal() { clearTimeout(saveTimer); saveTimer = setTimeout(() => store.save(data), 200); render(); } // cambios que no son del usuario (p. ej. el tiempo): no se sincronizan
 window.addEventListener('beforeunload', () => store.save(data));
 
-function toast(msg) {
+function toast(msg, deshacer) {
   document.querySelectorAll('.toast').forEach((t) => t.remove());
-  const t = h('div', { class: 'toast', role: 'status' }, msg); document.body.append(t); setTimeout(() => t.remove(), 3200);
+  const t = h('div', { class: 'toast', role: 'status' }, msg, deshacer ? h('button', { class: 'toast-undo', type: 'button', onclick: () => { t.remove(); deshacer(); } }, 'Deshacer') : null);
+  document.body.append(t); setTimeout(() => t.remove(), deshacer ? 6000 : 3200);
+}
+// Quita un elemento de una lista y ofrece deshacerlo.
+function sacar(lista, i, nombre, despues) {
+  const [x] = lista.splice(i, 1); despues();
+  toast(`“${nombre}” quitado.`, () => { lista.splice(Math.min(i, lista.length), 0, x); despues(); });
 }
 
 /* Deslizar hacia la izquierda (móvil) para descubrir "Borrar". Con ratón se sigue usando la × de cada fila. */
@@ -102,7 +108,7 @@ function sheet({ title, body, save = 'Guardar', onSave, extra, cancel = 'Cancela
       h('header', {}, dismissible ? h('button', { class: 'btn plain', onclick: api.close }, cancel) : h('span'), h('h3', {}, title), onSave ? h('button', { class: 'btn', onclick: doSave }, save) : h('span')),
       h('div', { class: 'body' }, body, err),
       extra ? h('footer', {}, extra) : null));
-  api.el = veil; api.err = err; sheets.push(api); document.body.append(veil);
+  api.el = veil; api.err = err; api.dismissible = dismissible; sheets.push(api); document.body.append(veil);
   const first = veil.querySelector('input[type=text]'); if (first) first.focus();
   return api;
 }
@@ -110,7 +116,7 @@ function confirmSheet(title, msg, okLabel, onOk) {
   const s = sheet({ title, body: h('p', { class: 'mute' }, msg), save: okLabel, onSave: () => { onOk(); } });
   return s;
 }
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !S.auth && !sheets.length && S.tab === 'ajustes' && S.aj) { S.aj = null; S.animar = true; render(); return; } if (e.key === 'Escape' && S.auth && !sheets.length) { const a = document.getElementById('auth-atras'); if (a) a.click(); return; } if (e.key === 'Escape' && sheets.length && sheets[sheets.length - 1].el.querySelector('header .btn.plain')) sheets[sheets.length - 1].close(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheets.length) { const top = sheets[sheets.length - 1]; if (top.dismissible !== false) { top.close(); return; } } if (e.key === 'Escape' && !S.auth && !sheets.length && S.tab === 'ajustes' && S.aj) { S.aj = null; S.animar = true; render(); return; } if (e.key === 'Escape' && S.auth && !sheets.length) { const a = document.getElementById('auth-atras'); if (a) a.click(); return; } if (e.key === 'Escape' && sheets.length && sheets[sheets.length - 1].el.querySelector('header .btn.plain')) sheets[sheets.length - 1].close(); });
 
 /* ---------- campos reutilizables ---------- */
 const field = (label, input) => h('label', { class: 'field' }, h('span', {}, label), input);
@@ -199,7 +205,7 @@ function itemsEditor(items, onChange = () => {}) {
       const sel = h('span', { class: 'nm' }, L.ing(data, it[0]).n);
       box.append(deslizable(h('div', { class: 'itemblock' }, h('div', { class: 'itemrow' }, sel,
         h('input', { type: 'number', min: 0, step: 'any', value: String(it[1]), 'aria-label': 'Cantidad', oninput: (e) => { it[1] = num(e.target.value); sub.textContent = macroTxt(L.sumaItems(data, [it])); onChange(); } }),
-        h('span', { class: 'u' }, L.ing(data, it[0]).u), h('button', { class: 'x', 'aria-label': 'Quitar', onclick: () => { items.splice(i, 1); draw(); onChange(); } }, '×')), sub), () => { items.splice(i, 1); draw(); onChange(); }));
+        h('span', { class: 'u' }, L.ing(data, it[0]).u), h('button', { class: 'x', 'aria-label': 'Quitar', onclick: () => sacar(items, i, L.ing(data, it[0]).n, () => { draw(); onChange(); }) }, '×')), sub), () => sacar(items, i, L.ing(data, it[0]).n, () => { draw(); onChange(); })));
     });
     box.append(h('button', { class: 'btn sec', id: 'anadir-alimento', style: 'align-self:flex-start', onclick: () => buscarAlimento({ onPick: (id, q) => { items.push([id, q]); draw(); onChange(); } }) }, '+ Añadir alimento'));
   }
@@ -434,7 +440,7 @@ function editSesion(id) {
       h('input', { type: 'text', value: e.n, placeholder: 'Ejercicio', 'aria-label': 'Ejercicio', oninput: (x) => { e.n = x.target.value; } }),
       h('input', { type: 'text', value: e.s, placeholder: '4×8', 'aria-label': 'Series y repeticiones', oninput: (x) => { e.s = x.target.value; } }),
       h('button', { class: 'btn ' + (e.c ? '' : 'sec'), style: 'padding:6px 10px;font-size:13px', title: 'Apuntar kilos', onclick: () => { e.c = !e.c; draw(); } }, e.c ? 'kg ✓' : 'kg'),
-      h('button', { class: 'x', style: 'color:var(--faint);font-size:20px', 'aria-label': 'Quitar', onclick: () => { s.ej.splice(i, 1); draw(); } }, '×')), () => { s.ej.splice(i, 1); draw(); })),
+      h('button', { class: 'x', style: 'color:var(--faint);font-size:20px', 'aria-label': 'Quitar', onclick: () => sacar(s.ej, i, e.n || 'Ejercicio', draw) }, '×')), () => sacar(s.ej, i, e.n || 'Ejercicio', draw))),
       h('button', { class: 'btn sec', style: 'align-self:flex-start', onclick: () => { s.ej.push({ n: '', s: '3×10', c: true }); draw(); } }, '+ Ejercicio'));
   }
   draw(); pintarDias();
@@ -517,7 +523,7 @@ function extrasCard(f) {
   return h('section', { class: 'stack', style: 'gap:8px' },
     h('div', { class: 'row', style: 'padding:0 4px;min-height:0' }, h('div', { class: 'label grow' }, 'Extras de hoy'), h('button', { class: 'btn plain', id: 'add-extra', onclick: () => anadirExtra(f) }, '+ Añadir comida')),
     ex.length ? h('div', { class: 'group' }, ex.map((e, i) => deslizable(h('div', { class: 'row' }, h('div', { class: 'grow' }, e.n, h('div', { class: 'sub num' }, `${f1(e.q)} ${e.u === 'ud' ? 'ud' : e.u} · ${e.k} kcal · P ${f1(e.p)} g`)),
-      h('button', { class: 'chev', 'aria-label': 'Quitar ' + e.n, onclick: () => { ex.splice(i, 1); commit(); } }, '×')), () => { ex.splice(i, 1); commit(); })))
+      h('button', { class: 'chev', 'aria-label': 'Quitar ' + e.n, onclick: () => sacar(ex, i, e.n, commit) }, '×')), () => sacar(ex, i, e.n, commit))))
       : h('p', { class: 'mute small', style: 'padding-left:4px' }, 'Lo que comas fuera del plan se suma a tu día.'));
 }
 function macroBar(t) {
@@ -600,7 +606,12 @@ function abrirEntrenoHoy(f) {
       },
       extra: x.s ? h('button', { class: 'btn danger', id: 'ser-volver', onclick: () => { guardar(k, { s: null }); sheets.slice(-1)[0].close(); } }, 'Volver al plan') : null });
   };
-  const quitarEj = (e, k) => { const r = diaReg(f); if (e.extra) { r.ejExtra = (r.ejExtra || []).filter((x) => L.slug(x.n) !== k); if (!r.ejExtra.length) delete r.ejExtra; } else r.ejQuitar = [...(r.ejQuitar || []), k]; if (r.gym) delete r.gym[k]; commit(); pintar(); toast(`“${e.n}” quitado de hoy.`); };
+  const quitarEj = (e, k) => {
+    const r = diaReg(f), antes = { extra: r.ejExtra ? clone(r.ejExtra) : undefined, quitar: r.ejQuitar ? [...r.ejQuitar] : undefined, reg: r.gym && r.gym[k] ? { ...r.gym[k] } : undefined };
+    if (e.extra) { r.ejExtra = (r.ejExtra || []).filter((x) => L.slug(x.n) !== k); if (!r.ejExtra.length) delete r.ejExtra; } else r.ejQuitar = [...(r.ejQuitar || []), k];
+    if (r.gym) delete r.gym[k]; commit(); pintar();
+    toast(`“${e.n}” quitado de hoy.`, () => { const q = diaReg(f); if (antes.extra) q.ejExtra = antes.extra; else delete q.ejExtra; if (antes.quitar) q.ejQuitar = antes.quitar; else delete q.ejQuitar; if (antes.reg) { q.gym = q.gym || {}; q.gym[k] = antes.reg; } commit(); pintar(); });
+  };
   const fichas = (ses, reg) => L.ejerciciosDelDia(data, d).map((e) => {
     const k = L.slug(e.n), x = reg[k] || {}, u = e.c ? L.ultimoPeso(data, k, f) : null;
     const kgActual = x.kg != null ? x.kg : (u ? u.kg : null), sugerido = x.kg == null && !!u;     // si hoy no has puesto nada, se recuerda el de la última vez
@@ -727,7 +738,7 @@ function viewSemana() {
     h('div', { class: 'group' }, dias.map(({ d, i, t, o }) => {
       const pct = t && o.kcal ? Math.min(100, t.k / o.kcal * 100) : 0, pasa = t && o.kcal && t.k > o.kcal * 1.05;
       return h('div', { class: 'dayrow' + (L.iso(d) === fh ? ' hoy' : '') }, h('div', { class: 'dn' }, L.DIAS[i], h('small', {}, L.fechaCorta(d) + (L.esDiaGym(data, d) ? ' · con entreno' : '')),
-        t && t.k > 0 ? h('div', { class: 'dtot num' }, h('span', { class: pasa ? 'over' : '' }, `${L.miles(t.k)} kcal`), h('span', { class: 'mute' }, ` · P ${L.miles(t.p)} g`), h('div', { class: 'bar' + (pasa ? ' over' : '') }, h('i', { style: `width:${pct}%` }))) : null),
+        t && t.k > 0 ? h('div', { class: 'dtot num' }, h('span', { class: pasa ? 'over' : '' }, `${L.miles(t.k)} kcal`), h('span', { class: 'mute', style: 'margin-left:8px;white-space:nowrap' }, `P ${L.miles(t.p)} g`), h('div', { class: 'bar' + (pasa ? ' over' : '') }, h('i', { style: `width:${pct}%` }))) : null),
         h('div', { class: 'meals' }, ['desayuno', 'media', 'comida', 'merienda', 'cena'].filter((m) => !L.FIJAS.includes(m) || L.fijoOn(data, m)).map((m) => (L.FIJAS.includes(m) ? fijaBtn(semana, i, m, d) : platoBtn(semana, i, m))))); })));
 }
 
@@ -754,7 +765,7 @@ function viewCompra() {
         h('span', { class: 'box', 'aria-hidden': 'true', 'aria-pressed': String(!!marc[i]) }, icon('check')), h('span', { class: 'nm' }, L.ing(data, i).n), h('span', { class: 'q' }, L.cantidadCompra(data, i, tot[i])))),
         xs.map((x) => deslizable(h('div', { class: 'xrow' }, h('button', { class: 'item extra', 'aria-pressed': String(!!x.ok), onclick: () => { x.ok = !x.ok; commit(); } },
           h('span', { class: 'box', 'aria-hidden': 'true', 'aria-pressed': String(!!x.ok) }, icon('check')), h('span', { class: 'nm' }, x.n, h('span', { class: 'tag' }, 'Extra')), h('span', { class: 'q' }, x.q || '')),
-          h('button', { class: 'chev xdel', 'aria-label': 'Quitar ' + x.n, onclick: () => { data.extrasCompra = data.extrasCompra.filter((y) => y !== x); commit(); } }, '×')), () => { data.extrasCompra = data.extrasCompra.filter((y) => y !== x); commit(); }))));
+          h('button', { class: 'chev xdel', 'aria-label': 'Quitar ' + x.n, onclick: () => sacar(data.extrasCompra, data.extrasCompra.indexOf(x), x.n, commit) }, '×')), () => sacar(data.extrasCompra, data.extrasCompra.indexOf(x), x.n, commit)))));
   }).filter(Boolean);
   return h('div', { class: 'page' },
     h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, 'Compra'), h('p', { class: 'subtitle num' }, `${hechos} de ${total} en el carro`)),

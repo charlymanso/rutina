@@ -71,6 +71,16 @@ export function normalize(raw) {
   }
   for (const k of ['ingredientes', 'dias', 'compra']) if (!out[k] || typeof out[k] !== 'object') out[k] = {};
   delete out.agenda; delete out.clima; if (out.perfil) delete out.perfil.ciudad;                 // versiones anteriores: tiempo y recordatorios ya no existen
+  for (const [f, r] of Object.entries(out.dias)) {                // registros de un día: si algo viene con otra forma (datos viejos o dañados), se corrige sin romper la app
+    if (!r || typeof r !== 'object' || Array.isArray(r)) { out.dias[f] = { hechos: {} }; continue; }
+    if (r.cambios && typeof r.cambios === 'object' && !Array.isArray(r.cambios)) {
+      for (const k of Object.keys(r.cambios)) { const c = r.cambios[k]; if (!c || typeof c.t !== 'string') delete r.cambios[k]; else c.items = Array.isArray(c.items) ? c.items.filter((it) => Array.isArray(it) && it[0]) : []; }
+      if (!Object.keys(r.cambios).length) delete r.cambios;
+    } else delete r.cambios;
+    if (Array.isArray(r.ejExtra)) { r.ejExtra = r.ejExtra.filter((e) => e && typeof e.n === 'string' && e.n.trim()); if (!r.ejExtra.length) delete r.ejExtra; } else delete r.ejExtra;
+    if (!Array.isArray(r.ejQuitar)) delete r.ejQuitar;
+    if (!Array.isArray(r.extras)) delete r.extras;
+  }
   out.platosPropios = (Array.isArray(out.platosPropios) ? out.platosPropios : []).filter((x) => x && typeof x.t === 'string' && x.t.trim() && Array.isArray(x.items)).map((x) => ({ t: x.t.trim(), items: x.items.filter((it) => Array.isArray(it) && it[0]) }));
   out.extrasCompra = (Array.isArray(out.extrasCompra) ? out.extrasCompra : []).filter((x) => x && typeof x.n === 'string' && x.n.trim())
     .map((x, i) => ({ id: String(x.id || 'x' + i), n: x.n.trim(), q: String(x.q || ''), s: SECC.some(([v]) => v === x.s) ? x.s : 'otros', ok: !!x.ok }));
