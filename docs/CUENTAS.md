@@ -18,7 +18,7 @@ Todo es gratuito. Necesitas dos cosas de Supabase (una dirección y una clave p�
 
 ## 4. Direcciones permitidas
 **Authentication → URL Configuration**:
-- *Site URL*: `https://charlymanso.github.io/rutina/`
+- *Site URL*: `https://rutina-fitness.netlify.app/`
 - *Redirect URLs*: añade `http://127.0.0.1:53682/callback`
 
 ## 5. Correo y contraseña

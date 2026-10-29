@@ -854,8 +854,8 @@ function viewAjustes() {
       grupo(null, tapRow('Borrar todos mis datos', 'No se puede deshacer.', () => confirmSheet('¿Borrar todo?', Nube.haySesion() ? 'Se eliminarán tu plan, tus registros y tus ajustes, tanto de este ordenador como de tu cuenta en la nube.' : 'Se eliminarán tu plan, tus registros y tus ajustes de este ordenador.', 'Borrar todo', async () => { if (Nube.haySesion()) { try { await Nube.borrarNube(); } catch { toast('No se pudo borrar la copia de la nube. Inténtalo con conexión.'); return; } } data = emptyData(); store.save(data); S.tab = 'hoy'; S.aj = null; render(); bienvenida(); }))));
     case 'acerca': return subpagina('Acerca de Rutina', null,
       grupo(null, rowOf('Versión', h('span', { class: 'mute num' }, S.version || 'Web')),
-        h('a', { class: 'row tap', href: 'https://charlymanso.github.io/rutina/', target: '_blank', rel: 'noopener' }, h('div', { class: 'grow' }, 'Sitio web'), h('span', { class: 'chev' }, '›')),
-        h('a', { class: 'row tap', href: 'https://charlymanso.github.io/rutina/privacidad.html', target: '_blank', rel: 'noopener' }, h('div', { class: 'grow' }, 'Política de privacidad'), h('span', { class: 'chev' }, '›'))));
+        h('a', { class: 'row tap', href: 'https://rutina-fitness.netlify.app/', target: '_blank', rel: 'noopener' }, h('div', { class: 'grow' }, 'Sitio web'), h('span', { class: 'chev' }, '›')),
+        h('a', { class: 'row tap', href: 'https://rutina-fitness.netlify.app/privacidad.html', target: '_blank', rel: 'noopener' }, h('div', { class: 'grow' }, 'Política de privacidad'), h('span', { class: 'chev' }, '›'))));
     default: return h('div', { class: 'page' },
       h('div', {}, h('h1', { class: 'title' }, 'Ajustes')),
       grupo(null, Nube.nubeActiva() ? filaAj('cuenta', 'cuenta', '#0a84ff', 'Cuenta', u ? u.email : 'Sin iniciar sesión') : null, filaAj('perfil', 'perfil', '#8e8e93', 'Perfil', p.nombre || 'Tu nombre y tu ciudad')),
@@ -899,7 +899,7 @@ function viewInicio() {
       h('button', { class: 'btn big', id: 'gate-correo', onclick: () => irAuth('entrar') }, 'Continuar con correo'),
       h('button', { class: 'btn plain big', id: 'gate-invitado', onclick: () => { S.saltarInicio = true; render(); bienvenida(); } }, 'Continuar como invitado'), msg, err),
     h('p', { class: 'gate-note' }, 'Como invitado, tus datos se guardan solo en este ordenador. Con una cuenta puedes usarla también en otros. ',
-      h('a', { href: 'https://charlymanso.github.io/rutina/privacidad.html', target: '_blank', rel: 'noopener' }, 'Privacidad'))));
+      h('a', { href: 'https://rutina-fitness.netlify.app/privacidad.html', target: '_blank', rel: 'noopener' }, 'Privacidad'))));
 }
 
 /* ---------- aviso de actualización ---------- */
@@ -988,7 +988,7 @@ function viewAuth() {
     });
     cuerpo = [campo('auth-correo', 'Correo electrónico', 'correo', 'correo', 'email'), campo('auth-clave', 'Contraseña (mínimo 8 caracteres)', 'clave', 'clave', 'new-password'), campo('auth-clave2', 'Repite la contraseña', 'clave', 'clave2', 'new-password'),
       h('button', { class: 'btn big', id: 'auth-enviar', onclick: enviar }, 'Crear cuenta'),
-      h('p', { class: 'gate-note', style: 'margin:0' }, 'Al crear la cuenta aceptas la ', h('a', { href: 'https://charlymanso.github.io/rutina/privacidad.html', target: '_blank', rel: 'noopener' }, 'política de privacidad'), '.'),
+      h('p', { class: 'gate-note', style: 'margin:0' }, 'Al crear la cuenta aceptas la ', h('a', { href: 'https://rutina-fitness.netlify.app/privacidad.html', target: '_blank', rel: 'noopener' }, 'política de privacidad'), '.'),
       Nube.puedeGoogle() ? [separador, botonGoogle(google)] : null];
     pie = ['¿Ya tienes cuenta? ', h('button', { class: 'link', id: 'auth-alt', onclick: () => { S.auth = 'entrar'; S.authMsg = ''; render(); } }, 'Entrar')];
   } else if (p === 'recuperar') {

@@ -2,7 +2,7 @@
 import { esVersionNueva } from './logic.js';
 
 export const REPO = 'charlymanso/rutina';
-export const WEB = 'https://charlymanso.github.io/rutina/';
+export const WEB = 'https://rutina-fitness.netlify.app/';
 
 export async function buscarActualizacion() {
   const puente = typeof window !== 'undefined' ? window.rutina : null;
