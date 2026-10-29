@@ -155,6 +155,25 @@ assert.equal(L.esVersionNueva('0.1.10', 'v0.1.9'), false);
   t.dias[fl] = { hechos: {}, ejExtra: [{ n: 'Fondos', s: '4×12', c: true }], ejQuitar: [L.slug(ses.ej[0].n)] };
   const ej = L.ejerciciosDelDia(t, lunes); assert.equal(ej.length, n0, 'uno quitado y uno añadido'); assert.equal(ej[ej.length - 1].extra, true); assert.ok(!ej.some((e) => L.slug(e.n) === L.slug(ses.ej[0].n)));
   assert.equal(ses.ej.length, n0, 'la sesión del plan no se modifica');
+  // sesiones sumadas (bloques)
+  {
+    const s1 = t.entreno.sesiones[0], s2 = t.entreno.sesiones[1], lunesD = L.parseISO('2026-10-26'), fL = L.iso(lunesD);
+    const base = L.sesionDelDia(t, lunesD), otra = t.entreno.sesiones.find((x) => x.id !== base.id);
+    t.dias[fL] = { hechos: {}, bloques: [otra.id, otra.id, 'no-existe', base.id] };
+    assert.deepEqual(L.bloquesDelDia(t, lunesD).map((x) => x.id), [otra.id], 'sin repetidos, sin ids inexistentes y sin la propia sesión');
+    assert.equal(L.tituloEntreno(t, lunesD), `${base.t} + ${otra.t}`);
+    const todos = L.ejerciciosDelDia(t, lunesD), propios = new Set(base.ej.map((e) => L.slug(e.n))), deOtra = otra.ej.filter((e) => !propios.has(L.slug(e.n)));
+    assert.equal(todos.length, base.ej.length + deOtra.length, 'suma los ejercicios de las dos sesiones');
+    assert.ok(todos.filter((e) => e.bloque === otra.id).every((e) => e.origen === otra.t));
+    t.dias[fL].ejQuitar = [L.slug(otra.ej[0].n)]; assert.ok(!L.ejerciciosDelDia(t, lunesD).some((e) => L.slug(e.n) === L.slug(otra.ej[0].n)), 'se puede quitar un ejercicio de un bloque');
+    assert.equal(base.ej.length, L.sesionGym(t, 0).ej.length, 'las sesiones del plan no se modifican');
+    t.dias[fL] = { hechos: {}, bloques: [otra.id], entreno: 'descanso' }; assert.deepEqual(L.bloquesDelDia(t, lunesD), [], 'sin sesión principal no hay bloques');
+    // un ejercicio con el mismo nombre en dos sesiones sale una sola vez
+    const copia = JSON.parse(JSON.stringify(otra)); copia.id = 'zz'; copia.ej = [{ ...base.ej[0] }, { n: 'Nuevo', s: '3×10', c: true }]; t.entreno.sesiones.push(copia);
+    t.dias[fL] = { hechos: {}, bloques: ['zz'] }; const dd = L.ejerciciosDelDia(t, lunesD);
+    assert.equal(dd.filter((e) => L.slug(e.n) === L.slug(base.ej[0].n)).length, 1, 'ejercicio repetido solo una vez'); assert.ok(dd.some((e) => e.n === 'Nuevo' && e.bloque === 'zz'));
+    assert.deepEqual(normalize({ dias: { a: { bloques: ['x', 3, ''] }, b: { bloques: 'mal' } } }).dias, { a: { bloques: ['x'] }, b: {} }, 'normalize limpia los bloques');
+  }
   // extras de la compra
   const c = makeTemplate(); c.extrasCompra = [{ id: 'x1', n: 'Papel de cocina', q: '2 packs', s: 'otros', ok: false }, { id: 'x2', n: 'Pollo extra', q: '', s: 'carne', ok: false }];
   const txt = L.textoCompra(c, 2); assert.ok(txt.includes('OTROS') && txt.includes('- Papel de cocina: 2 packs') && txt.includes('- Pollo extra'), 'copiar lista incluye extras');

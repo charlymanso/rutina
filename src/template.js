@@ -79,6 +79,7 @@ export function normalize(raw) {
     } else delete r.cambios;
     if (Array.isArray(r.ejExtra)) { r.ejExtra = r.ejExtra.filter((e) => e && typeof e.n === 'string' && e.n.trim()); if (!r.ejExtra.length) delete r.ejExtra; } else delete r.ejExtra;
     if (!Array.isArray(r.ejQuitar)) delete r.ejQuitar;
+    if (Array.isArray(r.bloques)) { r.bloques = r.bloques.filter((x) => typeof x === 'string' && x); if (!r.bloques.length) delete r.bloques; } else delete r.bloques;
     if (!Array.isArray(r.extras)) delete r.extras;
   }
   out.platosPropios = (Array.isArray(out.platosPropios) ? out.platosPropios : []).filter((x) => x && typeof x.t === 'string' && x.t.trim() && Array.isArray(x.items)).map((x) => ({ t: x.t.trim(), items: x.items.filter((it) => Array.isArray(it) && it[0]) }));

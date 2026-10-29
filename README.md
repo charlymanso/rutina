@@ -7,7 +7,7 @@ Tu día en un solo sitio: menú semanal con calorías y proteína, lista de la c
 - **Menú:** semana a semana (ciclo de 1 o 2 semanas), con desayuno, media mañana, comida, merienda y cena; repetir un plato en varios días; recomendador de menús según tu objetivo.
 - **Platos:** los creas con ingredientes en Ajustes y los eliges en cualquier comida. Hoy puedes cambiar el plato o las cantidades solo por ese día.
 - **Compra:** sale del menú, agrupada por secciones del súper, con extras tuyos (etiqueta «Extra») y «Copiar lista».
-- **Entreno:** sesiones con varios días, pesos recordados, ejercicios añadidos o quitados solo por hoy.
+- **Entreno:** sesiones con varios días, pesos recordados, ejercicios añadidos o quitados solo por hoy, y otras sesiones (Brazo, Cardio…) sumadas al entreno de hoy como un solo entreno.
 - **Alimentos:** base incluida, productos de supermercado (Open Food Facts) y lector de códigos de barras con la cámara.
 - En el móvil, deslizar una fila hacia la izquierda la borra (con «Deshacer»).
 

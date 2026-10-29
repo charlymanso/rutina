@@ -461,7 +461,7 @@ function editSesion(id) {
 /* Cambiar el entreno de un día concreto sin tocar tu plan semanal */
 function cambiarEntrenoDia(f, modo = 'cambiar') {
   const d = L.parseISO(f), actual = L.sesionDelDia(data, d), plan = L.sesionGym(data, L.idxDia(d)), cambiado = L.hayCambioDeEntreno(data, d), anadir = modo === 'anadir';
-  const poner = (valor) => { const dr = diaReg(f); if ((valor === 'descanso' && !plan) || (valor && plan && valor === plan.id)) delete dr.entreno; else dr.entreno = valor; sh.close(); commit(); if (S.entrenoGrande) S.entrenoGrande(); toast(valor === 'descanso' ? 'Hoy toca descanso.' : anadir ? 'Entreno añadido.' : 'Entreno cambiado.'); };
+  const poner = (valor) => { const dr = diaReg(f); delete dr.bloques; if ((valor === 'descanso' && !plan) || (valor && plan && valor === plan.id)) delete dr.entreno; else dr.entreno = valor; sh.close(); commit(); if (S.entrenoGrande) S.entrenoGrande(); toast(valor === 'descanso' ? 'Hoy toca descanso.' : anadir ? 'Entreno añadido.' : 'Entreno cambiado.'); };
   const fila = (id, titulo, sub, activa) => h('button', { class: 'row tap', type: 'button', id: 'cambiar-' + id, 'aria-pressed': String(activa), onclick: () => poner(id) }, h('div', { class: 'grow' }, titulo, sub ? h('div', { class: 'sub' }, sub) : null), h('span', { class: 'chev', style: 'color:var(--accent);font-weight:700' }, activa ? '✓' : ''));
   const sh = sheet({ title: anadir ? 'Añadir entreno' : 'Entreno de hoy', body: [
     h('p', { class: 'mute small' }, anadir ? 'Elige la sesión que vas a hacer hoy. Solo cambia este día; tu plan semanal no se toca. Tu objetivo de calorías de hoy se ajusta.'
@@ -588,6 +588,18 @@ function anadirEjercicio(f) {
     const r = diaReg(f); (r.ejExtra ||= []).push({ n, s: `${sr}×${rp}`, c: peso.getAttribute('aria-checked') === 'true' }); commit(); if (S.entrenoGrande) S.entrenoGrande();
   } });
 }
+/* Sumar otra sesión (un bloque: Brazo, Cardio…) al entreno de hoy: sale todo como un solo entreno y el plan no cambia. */
+function anadirBloque(f) {
+  const d = L.parseISO(f), ses = L.sesionDelDia(data, d); if (!ses) return;
+  const ya = new Set([ses.id, ...L.bloquesDelDia(data, d).map((x) => x.id)]), opciones = data.entreno.sesiones.filter((x) => !ya.has(x.id));
+  const sh = sheet({ title: 'Añadir otra sesión', cancel: 'Cerrar', body: [
+    h('p', { class: 'mute small' }, `Se suma a “${ses.t}” y se apunta todo junto en un solo entreno. Solo vale para hoy: tus sesiones no cambian.`),
+    opciones.length ? h('div', { class: 'group' }, opciones.map((x) => h('button', { type: 'button', class: 'row tap', id: 'sumar-' + x.id, onclick: () => {
+      sh.close(); const r = diaReg(f); r.bloques = [...(r.bloques || []), x.id]; commit(); if (S.entrenoGrande) S.entrenoGrande(); toast(`“${x.t}” sumada al entreno de hoy.`);
+    } }, h('div', { class: 'grow' }, x.t, h('div', { class: 'sub' }, `${x.ej.length} ejercicio${x.ej.length === 1 ? '' : 's'}${x.min ? ' · ' + x.min : ''}`)), h('span', { class: 'chev' }, '+'))))
+      : h('p', { class: 'mute small', id: 'bloque-vacio' }, 'No tienes más sesiones para sumar. Crea una, por ejemplo “Brazo” o “Cardio”, y aparecerá aquí.')],
+    extra: h('button', { class: 'btn plain', id: 'bloque-nueva', onclick: () => { sh.close(); editSesion(null); } }, 'Crear una sesión nueva…') });
+}
 /* Vista grande del entreno de hoy: se abre al tocar la tarjeta. Recuerda el último peso de cada ejercicio. */
 function abrirEntrenoHoy(f) {
   const d = L.parseISO(f), cuerpo = h('div', { class: 'stack', style: 'gap:18px' });
@@ -602,7 +614,7 @@ function abrirEntrenoHoy(f) {
       onSave: () => {
         const sr = parseInt(series.value, 10), rp = reps.value.trim(); if (!(sr >= 1)) return 'Escribe cuántas series.'; if (!rp) return 'Escribe las repeticiones.';
         const nuevo = `${sr}×${rp}`;
-        if (!e.extra && plan.getAttribute('aria-checked') === 'true') { e.s = nuevo; guardar(k, { s: null }); commit(); toast('Cambiado en tu plan.'); } else guardar(k, { s: nuevo === e.s ? null : nuevo });
+        if (!e.extra && plan.getAttribute('aria-checked') === 'true') { const real = (e.bloque ? data.entreno.sesiones.find((y) => y.id === e.bloque) : ses).ej.find((y) => L.slug(y.n) === k); if (real) real.s = nuevo; guardar(k, { s: null }); commit(); toast('Cambiado en tu plan.'); } else guardar(k, { s: nuevo === e.s ? null : nuevo });
       },
       extra: x.s ? h('button', { class: 'btn danger', id: 'ser-volver', onclick: () => { guardar(k, { s: null }); sheets.slice(-1)[0].close(); } }, 'Volver al plan') : null });
   };
@@ -612,7 +624,7 @@ function abrirEntrenoHoy(f) {
     if (r.gym) delete r.gym[k]; commit(); pintar();
     toast(`“${e.n}” quitado de hoy.`, () => { const q = diaReg(f); if (antes.extra) q.ejExtra = antes.extra; else delete q.ejExtra; if (antes.quitar) q.ejQuitar = antes.quitar; else delete q.ejQuitar; if (antes.reg) { q.gym = q.gym || {}; q.gym[k] = antes.reg; } commit(); pintar(); });
   };
-  const fichas = (ses, reg) => L.ejerciciosDelDia(data, d).map((e) => {
+  const fichas = (ses, reg, lista) => lista.map((e) => {
     const k = L.slug(e.n), x = reg[k] || {}, u = e.c ? L.ultimoPeso(data, k, f) : null;
     const kgActual = x.kg != null ? x.kg : (u ? u.kg : null), sugerido = x.kg == null && !!u;     // si hoy no has puesto nada, se recuerda el de la última vez
     const mover = (delta) => guardar(k, { kg: Math.max(0, Math.round(((kgActual ?? 0) + delta) * 100) / 100) });
@@ -631,17 +643,28 @@ function abrirEntrenoHoy(f) {
         ),
       u ? h('div', { class: 'mute small' }, `${sugerido ? 'Peso de la última vez' : 'Última vez'}: ${L.kgTxt(u.kg)} kg · ${L.fechaCorta(L.parseISO(u.f))}`) : null), () => quitarEj(e, k), 'Quitar', 'ficha-sw');
   });
+  const quitarBloque = (b, ejsBloque) => {
+    const r = diaReg(f), antesBl = [...(r.bloques || [])], regs = {};
+    for (const e of ejsBloque) { const k = L.slug(e.n); if (r.gym && r.gym[k]) { regs[k] = { ...r.gym[k] }; delete r.gym[k]; } }
+    r.bloques = antesBl.filter((id) => id !== b.id); if (!r.bloques.length) delete r.bloques; commit(); pintar();
+    toast(`“${b.t}” quitada de hoy.`, () => { const q = diaReg(f); q.bloques = antesBl; q.gym = { ...(q.gym || {}), ...regs }; commit(); pintar(); });
+  };
   function pintar() {
     if (!document.body.contains(cuerpo)) return;
     const ses = L.sesionDelDia(data, d); if (!ses) { sh.close(); return; }
     const reg = L.regGym(data, f), ejs = L.ejerciciosDelDia(data, d), total = ejs.length, hechos = ejs.filter((e) => reg[L.slug(e.n)] && reg[L.slug(e.n)].hecho).length, quitados = (data.dias[f] && data.dias[f].ejQuitar) || [], terminado = !!L.hechosDe(data, f).gym;
     const cont = cuerpo.parentElement, top = cont ? cont.scrollTop : 0;
     cuerpo.replaceChildren(
-      h('div', {}, h('div', { class: 'label' }, `Entreno${ses.min ? ' · ' + ses.min : ''}`), h('h2', { class: 'grande-titulo', id: 'entreno-titulo' }, ses.t),
+      h('div', {}, h('div', { class: 'label' }, `Entreno${ses.min ? ' · ' + ses.min : ''}`), h('h2', { class: 'grande-titulo', id: 'entreno-titulo' }, L.tituloEntreno(data, d)),
         h('div', { class: 'row', style: 'padding:8px 0 0;gap:10px;min-height:0' }, h('div', { class: 'bar grow' }, h('i', { style: `width:${total ? Math.round(hechos / total * 100) : 0}%` })), h('span', { class: 'num mute', id: 'entreno-progreso' }, `${hechos} de ${total}`))),
-      ...fichas(ses, reg),
+      ...fichas(ses, reg, ejs.filter((e) => !e.bloque && !e.extra)),
+      ...L.bloquesDelDia(data, d).flatMap((b) => { const mios = ejs.filter((e) => e.bloque === b.id); return [
+        h('div', { class: 'row bloque-cab', id: 'bloque-' + b.id, style: 'padding:6px 4px 0;min-height:0' }, h('div', { class: 'grow' }, h('div', { class: 'label' }, 'Sesión sumada'), h('h3', { class: 'bloque-titulo' }, b.t)),
+          h('button', { class: 'btn plain', id: 'bloque-quitar-' + b.id, onclick: () => quitarBloque(b, mios) }, 'Quitar sesión')),
+        ...(mios.length ? fichas(ses, reg, mios) : [h('p', { class: 'mute small', style: 'padding-left:4px' }, 'Todos sus ejercicios están quitados de hoy.')])]; }),
+      ...fichas(ses, reg, ejs.filter((e) => e.extra)),
       h('p', { class: 'hint-swipe mute small' }, 'Desliza un ejercicio hacia la izquierda para quitarlo de hoy.'),
-      h('div', { class: 'row', style: 'padding:0;min-height:0;flex-wrap:wrap;gap:4px 12px' }, h('button', { class: 'btn sec', id: 'ej-anadir', onclick: () => anadirEjercicio(f) }, '+ Añadir ejercicio'),
+      h('div', { class: 'row', style: 'padding:0;min-height:0;flex-wrap:wrap;gap:4px 12px' }, h('button', { class: 'btn sec', id: 'ej-anadir', onclick: () => anadirEjercicio(f) }, '+ Añadir ejercicio'), h('button', { class: 'btn sec', id: 'bloque-anadir', onclick: () => anadirBloque(f) }, '+ Añadir otra sesión'),
         quitados.length ? h('button', { class: 'btn plain', id: 'ej-restaurar', onclick: () => { delete diaReg(f).ejQuitar; commit(); pintar(); } }, `Restaurar ${quitados.length} quitado${quitados.length === 1 ? '' : 's'}`) : null),
       h('div', { class: 'stack', style: 'gap:8px' },
         terminado ? h('button', { class: 'btn sec wide', id: 'entreno-reabrir', onclick: () => { toggleHecho(f, 'gym'); pintar(); } }, 'Entreno completado ✓ · Marcar como pendiente')
@@ -681,7 +704,7 @@ function viewHoy() {
   }
   const ses = L.sesionDelDia(data, d);
   if (ses) { const reg = L.regGym(data, f), ejs = L.ejerciciosDelDia(data, d), hechasEj = ejs.filter((e) => reg[L.slug(e.n)] && reg[L.slug(e.n)].hecho).length;
-    slots.push({ k: 'gym', hora: data.entreno.hora, kind: `Entreno${ses.min ? ' · ' + ses.min : ''}${L.hayCambioDeEntreno(data, d) ? ' · cambiado' : ''}`, title: ses.t, det: `${hechasEj} de ${ejs.length} ejercicios`, progreso: ejs.length ? hechasEj / ejs.length : 0, accion: () => abrirEntrenoHoy(f) }); }
+    slots.push({ k: 'gym', hora: data.entreno.hora, kind: `Entreno${ses.min ? ' · ' + ses.min : ''}${L.hayCambioDeEntreno(data, d) ? ' · cambiado' : ''}`, title: L.tituloEntreno(data, d), det: `${hechasEj} de ${ejs.length} ejercicios`, progreso: ejs.length ? hechasEj / ejs.length : 0, accion: () => abrirEntrenoHoy(f) }); }
   slots.sort((a, b) => L.minutos(a.hora) - L.minutos(b.hora));
   const now = new Date(), nm = now.getHours() * 60 + now.getMinutes(), sig = slots.find((s) => !hechos[s.k] && L.minutos(s.hora) >= nm - 60), hechas = slots.filter((s) => hechos[s.k]).length;
 

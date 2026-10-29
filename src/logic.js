@@ -157,11 +157,22 @@ export function textoCompra(data, sel) {
 
 // ---- registros ----
 export const hechosDe = (data, f) => (data.dias[f] && data.dias[f].hechos) || {};
-// Ejercicios de un día: los de la sesión (menos los que quitaste hoy) y los que añadiste solo para hoy. La sesión del plan no se toca.
+// Otras sesiones sumadas al entreno de hoy ("bloques", p. ej. Brazo o Cardio además de Pecho). Solo valen ese día; el plan no cambia.
+export function bloquesDelDia(data, d) {
+  const ses = sesionDelDia(data, d); if (!ses) return [];
+  const ids = (data.dias[iso(d)] || {}).bloques; if (!Array.isArray(ids)) return [];
+  return [...new Set(ids)].map((id) => data.entreno.sesiones.find((x) => x.id === id)).filter((x) => x && x.id !== ses.id);
+}
+export const tituloEntreno = (data, d) => { const ses = sesionDelDia(data, d); return ses ? [ses, ...bloquesDelDia(data, d)].map((x) => x.t).join(' + ') : ''; };
+// Ejercicios de un día: los de la sesión, los de los bloques sumados, menos los que quitaste hoy, y los que añadiste solo para hoy. El plan no se toca.
 export function ejerciciosDelDia(data, d) {
   const ses = sesionDelDia(data, d); if (!ses) return [];
-  const r = data.dias[iso(d)] || {}, quitar = r.ejQuitar || [], extra = r.ejExtra || [];
-  return ses.ej.filter((e) => !quitar.includes(slug(e.n))).concat(extra.map((e) => ({ ...e, extra: true })));
+  const r = data.dias[iso(d)] || {}, quitar = r.ejQuitar || [], extra = r.ejExtra || [], vistos = new Set(), out = [];
+  for (const s of [ses, ...bloquesDelDia(data, d)]) for (const e of s.ej) {
+    const k = slug(e.n); if (quitar.includes(k) || vistos.has(k)) continue;   // un ejercicio repetido en dos sesiones sale una sola vez
+    vistos.add(k); out.push(s === ses ? e : { ...e, bloque: s.id, origen: s.t });
+  }
+  return out.concat(extra.map((e) => ({ ...e, extra: true })));
 }
 export const regGym = (data, f) => (data.dias[f] && data.dias[f].gym) || {};
 export function ultimoPeso(data, k, antesDe) {
