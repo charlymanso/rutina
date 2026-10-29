@@ -130,7 +130,7 @@ ipcMain.handle('oauth:abrir', (_e, url) => new Promise((resolve, reject) => {
 }));
 
 app.whenReady().then(() => {
-  session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  session.defaultSession.setPermissionRequestHandler((_wc, perm, cb, det) => cb(perm === 'media' && !!det && Array.isArray(det.mediaTypes) && det.mediaTypes.length > 0 && det.mediaTypes.every((t) => t === 'video')));   // solo cámara (lector de códigos)
   crearVentana();
   iniciarActualizador();
   app.on('browser-window-focus', comprobarActualizacion);

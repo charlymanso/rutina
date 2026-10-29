@@ -1,4 +1,5 @@
 // Open Food Facts: productos de supermercado con su información nutricional por 100 g / 100 ml.
+import { NUBE } from './config.js';
 const puente = () => (typeof window !== 'undefined' ? window.rutina : null);
 const r1 = (n) => Math.round(n * 10) / 10;
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -15,11 +16,18 @@ export function aAlimento(p) {
     k: Math.round(kcal), p: r1(prot), ...(c != null ? { c: r1(c) } : {}), ...(f != null ? { f: r1(f) } : {}), s: 'despensa', por: 100, origen: 'off', code: p.code };
 }
 
-// null = no disponible aquí (navegador). Lanza si no hay conexión.
+// null = no disponible aquí. En el ordenador va por la app; en la web, por un pequeño puente en la nube de la cuenta
+// (el navegador no puede consultar directamente el buscador). Lanza si no hay conexión.
+async function hits(q) {
+  if (puente() && puente().buscarAlimentos) return puente().buscarAlimentos(q);
+  if (!NUBE.url) return null;
+  const r = await fetch(`${NUBE.url}/functions/v1/alimentos?q=${encodeURIComponent(q)}`, { headers: { apikey: NUBE.anonKey, Authorization: `Bearer ${NUBE.anonKey}` } });
+  if (!r.ok) throw new Error('sin conexión'); return (await r.json()).hits || [];
+}
 export async function buscarOnline(q) {
-  if (!puente() || !puente().buscarAlimentos) return null;
+  const lista = await hits(q); if (lista === null) return null;
   const vistos = new Set();
-  return (await puente().buscarAlimentos(q)).map(aAlimento).filter((a) => a && !vistos.has(a.n.toLowerCase()) && vistos.add(a.n.toLowerCase()));
+  return lista.map(aAlimento).filter((a) => a && !vistos.has(a.n.toLowerCase()) && vistos.add(a.n.toLowerCase()));
 }
 export async function porCodigo(codigo) {
   const prod = puente() && puente().alimentoPorCodigo ? await puente().alimentoPorCodigo(codigo)

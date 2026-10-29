@@ -37,6 +37,7 @@ const ICONS = {
   objetivos: [['circle', { cx: 12, cy: 12, r: 9 }], ['circle', { cx: 12, cy: 12, r: 5 }], ['circle', { cx: 12, cy: 12, r: 1.3 }]],
   ingredientes: [['path', { d: 'M4.5 11h15l-1.6 8a2 2 0 0 1-2 1.6H8.1a2 2 0 0 1-2-1.6L4.5 11z' }], ['path', { d: 'M8 11c0-3 1.6-5 4-5s4 2 4 5' }]],
   datos: [['ellipse', { cx: 12, cy: 6, rx: 7, ry: 3 }], ['path', { d: 'M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6' }]],
+  barcode: [['path', { d: 'M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M8 9v6M11 9v6M14 9v6M17 9v6' }]],
   acerca: [['circle', { cx: 12, cy: 12, r: 9 }], ['path', { d: 'M12 11v5.5' }], ['circle', { cx: 12, cy: 7.8, r: .7 }]],
 };
 function icon(name) {
@@ -108,7 +109,7 @@ const cantidadPorDefecto = (g) => g.por || (g.u === 'ud' ? 1 : 100);
 
 /* Buscador de alimentos: tus ingredientes, la base incluida y (en la app de escritorio) productos de supermercado. */
 function buscarAlimento({ titulo = 'Añadir alimento', onPick }) {
-  const q = h('input', { type: 'text', id: 'buscar-alimento', placeholder: 'Busca un alimento o escribe un código de barras', autocomplete: 'off' });
+  const q = h('input', { type: 'text', id: 'buscar-alimento', placeholder: 'Busca un alimento o escribe un código', autocomplete: 'off' });
   const lista = h('div', { class: 'stack', style: 'gap:16px' });
   let timer = null, seq = 0, online = { estado: 'idle', items: [] };
   const elegir = (a) => {
@@ -128,7 +129,7 @@ function buscarAlimento({ titulo = 'Añadir alimento', onPick }) {
     if (t.length >= 3) {
       let cuerpo;
       if (online.estado === 'cargando') cuerpo = h('p', { class: 'mute small', style: 'padding-left:4px' }, 'Buscando productos…');
-      else if (online.estado === 'noapp') cuerpo = h('p', { class: 'mute small', style: 'padding-left:4px' }, 'La búsqueda de productos de marca solo está en la app de escritorio. Aquí puedes usar la base incluida o escribir el código de barras.');
+      else if (online.estado === 'noapp') cuerpo = h('p', { class: 'mute small', style: 'padding-left:4px' }, 'La búsqueda de productos de marca necesita conexión. Puedes usar la base incluida o escribir el código de barras.');
       else if (online.estado === 'error') cuerpo = h('p', { class: 'mute small', style: 'padding-left:4px' }, 'No se pudo consultar la base online. Revisa tu conexión; puedes usar tus ingredientes y la base incluida.');
       else if (online.estado === 'ok') cuerpo = online.items.length ? h('div', { class: 'group' }, online.items.map(fila)) : h('p', { class: 'mute small', style: 'padding-left:4px' }, esCodigoDeBarras(t) ? 'No hay ningún producto con ese código.' : 'Sin resultados de productos.');
       if (cuerpo) out.push(seccion('Productos de supermercado', cuerpo, h('p', { class: 'mute', style: 'font-size:12px;padding-left:4px' }, 'Datos de Open Food Facts, aportados por usuarios. Pueden contener errores.')));
@@ -142,11 +143,22 @@ function buscarAlimento({ titulo = 'Añadir alimento', onPick }) {
     try {
       const r = esCodigoDeBarras(t) ? [await porCodigo(t)].filter(Boolean) : await buscarOnline(t);
       if (mi !== seq) return; online = r === null ? { estado: 'noapp', items: [] } : { estado: 'ok', items: r };
-    } catch { if (mi !== seq) return; online = { estado: esCodigoDeBarras(t) || (window.rutina && window.rutina.buscarAlimentos) ? 'error' : 'noapp', items: [] }; }
+    } catch { if (mi !== seq) return; online = { estado: 'error', items: [] }; }
     pintar();
   }
   q.addEventListener('input', () => { pintar(); clearTimeout(timer); timer = setTimeout(consultar, 450); });
-  const sh = sheet({ title: titulo, body: [q, lista], extra: h('button', { class: 'btn plain', id: 'crear-alimento', onclick: () => editIngrediente(null, (id) => { sh.close(); onPick(id, cantidadPorDefecto(data.ingredientes[id])); }, { n: q.value.trim() }) }, 'Crear uno nuevo…') });
+  const escanear = () => {
+    let parar = null, abierto = true; const video = h('video', { class: 'scan-video', autoplay: '', playsinline: '', muted: '' }), msg = h('p', { class: 'mute small', id: 'scan-msg', style: 'text-align:center' }, 'Apunta al código de barras del producto.');
+    const cerrar = () => { abierto = false; if (parar) parar(); clearInterval(vig); };
+    const sc = sheet({ title: 'Escanear código', body: [h('div', { class: 'scan' }, video, h('div', { class: 'scan-guia' })), msg] });
+    const vig = setInterval(() => { if (!sc.el.isConnected) cerrar(); }, 250);
+    import('./scanner.js').then(async (M) => {
+      if (!M.hayCamara()) { msg.textContent = 'Este dispositivo no permite usar la cámara aquí. Escribe el código a mano.'; return; }
+      try { const p = await M.iniciar(video, (cod) => { sc.close(); q.value = cod; pintar(); consultar(); }); if (abierto) parar = p; else p(); }
+      catch (e) { msg.textContent = e && e.name === 'NotAllowedError' ? 'No hay permiso para usar la cámara. Actívalo en los ajustes del dispositivo o escribe el código a mano.' : 'No se pudo abrir la cámara. Escribe el código a mano.'; }
+    });
+  };
+  const sh = sheet({ title: titulo, body: [h('div', { class: 'buscar-fila' }, q, h('button', { type: 'button', class: 'btn sec', id: 'escanear', 'aria-label': 'Escanear código de barras', onclick: escanear }, icon('barcode'))), lista], extra: h('button', { class: 'btn plain', id: 'crear-alimento', onclick: () => editIngrediente(null, (id) => { sh.close(); onPick(id, cantidadPorDefecto(data.ingredientes[id])); }, { n: q.value.trim() }) }, 'Crear uno nuevo…') });
   pintar();
 }
 

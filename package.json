@@ -1,7 +1,7 @@
 {
   "name": "rutina",
   "productName": "Rutina",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Tu comida, tu compra y tus entrenos en un solo sitio.",
   "author": "Rutina",
   "license": "UNLICENSED",
@@ -37,7 +37,8 @@
         "dmg",
         "zip"
       ],
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "extendInfo": { "NSCameraUsageDescription": "Rutina usa la cámara solo para leer códigos de barras de productos." }
     },
     "dmg": {
       "title": "Rutina"
