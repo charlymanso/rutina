@@ -2,6 +2,8 @@
 
 Tu día en un solo sitio: menú semanal con calorías y proteína, lista de la compra, entrenos con registro de pesos y un resumen de lo que llevas comido. Funciona como **app de escritorio** (Windows y Mac), como **web instalable** en el móvil (PWA) y, opcionalmente, con una **cuenta** para sincronizar entre dispositivos.
 
+**Web: https://rutina-fitness.netlify.app** (la app del móvil está en `/app/`).
+
 ## Qué hace
 - **Hoy:** las comidas del día con su check, nutrición que se completa según marcas lo comido (en rojo si te pasas de calorías), extras fuera del plan, entreno de hoy.
 - **Menú:** semana a semana (ciclo de 1 o 2 semanas), con desayuno, media mañana, comida, merienda y cena; repetir un plato en varios días; recomendador de menús según tu objetivo.
@@ -39,7 +41,7 @@ Para la versión web basta servir `src/` con cualquier servidor estático (`pyth
 - GitHub ejecuta todo esto en cada subida a `main` (`.github/workflows/tests.yml`).
 
 ## Publicar versiones
-Todo está automatizado con GitHub Actions: al subir a `main` un `package.json` con una versión **nueva**, se crean los instaladores (`Rutina-win-x64.exe`, `Rutina-mac-*.dmg/zip`), se publican en *Releases* y se actualiza la web (`/app/` es la versión móvil). Windows se actualiza solo; en Mac la app avisa de la versión nueva.
+Todo está automatizado con GitHub Actions: al subir a `main` un `package.json` con una versión **nueva**, se crean los instaladores (`Rutina-win-x64.exe`, `Rutina-mac-*.dmg/zip`), se publican en *Releases* y Netlify publica la web (`/app/` es la versión móvil; ver `netlify.toml`). La dirección antigua de GitHub Pages solo redirige a la nueva (`redirect/`). Windows se actualiza solo; en Mac la app avisa de la versión nueva.
 
 ## Cuentas (opcional)
 Con una cuenta, el plan se guarda también en la nube (Supabase, correo/contraseña o Google) y se sincroniza. Si hay cambios en los dos sitios a la vez, la app pregunta cuál conservar; nunca pisa nada sin avisar. Las cuentas quedan apagadas mientras `src/config.js` tenga la dirección vacía. Pasos en [docs/CUENTAS.md](docs/CUENTAS.md).
