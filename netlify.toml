@@ -1,0 +1,24 @@
+# Publicación en Netlify (alternativa gratuita a GitHub Pages, con una dirección más limpia).
+# La web de descarga está en site/ y la app del móvil se copia a /app/ al construir, igual que hace el workflow de GitHub Pages.
+[build]
+  # base = "site": así Netlify no intenta instalar las dependencias de Electron (no hacen falta para la web)
+  base = "site"
+  publish = "."
+  command = "mkdir -p app && cp -r ../src/. app/ && rm -f app/package.json && sed -i \"s/__BUILD__/$(echo $COMMIT_REF | cut -c1-8)/\" app/sw.js"
+
+# El service worker y la página de inicio nunca se guardan en caché, para que cada versión nueva llegue al momento.
+[[headers]]
+  for = "/app/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/app/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
