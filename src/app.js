@@ -881,6 +881,10 @@ function logo(px = 88) {
 /* ---------- pantalla de inicio ---------- */
 const mostrarInicio = () => Nube.nubeActiva() && !data.perfil.listo && !Nube.haySesion() && !S.saltarInicio;
 // Después de entrar: si la cuenta ya tenía plan se carga solo; si es nueva, se pasa a la bienvenida.
+// En el iPhone, tras Google queda una ventanita encima: se avisa de cómo volver a la app
+function mensajeVolver() {
+  sheet({ title: 'Sesión iniciada', save: 'Entendido', body: [h('p', {}, 'Ya has entrado con Google. Si ves arriba una barra con «Hecho», púlsala para volver a Rutina: te estará esperando con la sesión iniciada.')], onSave: () => {} });
+}
 async function trasEntrar() {
   S.nube = null; S.auth = null; await Sync.sincronizar(); S.saltarInicio = true; render();
   if (!data.perfil.listo) bienvenida(); else toast('Sesión iniciada.');
@@ -1066,7 +1070,14 @@ document.addEventListener('keydown', (e) => {
       onEstado: (e) => { S.nube = { ...(S.nube || {}), ...e }; const el = document.getElementById('estado-nube'); if (el) el.textContent = textoEstado(); },
       onSesionCaducada: () => { S.nube = null; render(); toast('Tu sesión ha caducado. Vuelve a entrar en Ajustes.'); } });
     if (S.errorInicio) toast(S.errorInicio);
-    if (S.vuelveDeGoogle) trasEntrar(); else if (Nube.haySesion()) Sync.sincronizar();
+    if (S.vuelveDeGoogle) { await trasEntrar(); if (window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches) mensajeVolver(); } else if (Nube.haySesion()) Sync.sincronizar();
+    // Web instalada: si la sesión se inicia en otra ventana (la de Google en el iPhone), esta pantalla la recoge sola
+    let recogiendo = false;
+    const recogerSesion = async () => { if (recogiendo) return; recogiendo = true; try { if (await Nube.sesionNuevaEnAlmacen()) await trasEntrar(); } finally { recogiendo = false; } };
+    window.addEventListener('storage', (e) => { if (e.key === Nube.claveSesion()) recogerSesion(); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) recogerSesion(); });
+    window.addEventListener('pageshow', recogerSesion);
+    setInterval(() => { if (!Nube.haySesion()) recogerSesion(); }, 1500);
     let ultimoFoco = 0;
     window.addEventListener('focus', () => { if (Date.now() - ultimoFoco > 30000) { ultimoFoco = Date.now(); Sync.sincronizar(); } });
     setInterval(Sync.sincronizar, 5 * 60 * 1000);

@@ -44,6 +44,15 @@ async function guardarSesion(s) {
   if (puente() && puente().sesion) return puente().sesion.guardar(s);
   try { s ? localStorage.setItem(KEY, JSON.stringify(s)) : localStorage.removeItem(KEY); } catch { /* sin almacenamiento */ }
 }
+// Web instalada en iPhone: Google abre una ventanita encima y la sesión se inicia en ella; la app de debajo debe darse cuenta.
+// Devuelve true si ahora hay una sesión que esta pantalla aún no conocía.
+export async function sesionNuevaEnAlmacen() {
+  if (sesion || !nubeActiva() || puente()) return false;
+  let s = null; try { s = JSON.parse(localStorage.getItem(KEY)); } catch { s = null; }
+  if (!s || !s.access_token) return false;
+  sesion = s; return true;
+}
+export const claveSesion = () => KEY;
 export async function cargarSesion() {
   if (!nubeActiva()) return null;
   try { sesion = puente() && puente().sesion ? await puente().sesion.cargar() : JSON.parse(localStorage.getItem(KEY)); } catch { sesion = null; }
