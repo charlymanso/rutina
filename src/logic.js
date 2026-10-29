@@ -158,6 +158,12 @@ export function textoCompra(data, sel) {
 
 // ---- registros ----
 export const hechosDe = (data, f) => (data.dias[f] && data.dias[f].hechos) || {};
+// Ejercicios de un día: los de la sesión (menos los que quitaste hoy) y los que añadiste solo para hoy. La sesión del plan no se toca.
+export function ejerciciosDelDia(data, d) {
+  const ses = sesionDelDia(data, d); if (!ses) return [];
+  const r = data.dias[iso(d)] || {}, quitar = r.ejQuitar || [], extra = r.ejExtra || [];
+  return ses.ej.filter((e) => !quitar.includes(slug(e.n))).concat(extra.map((e) => ({ ...e, extra: true })));
+}
 export const regGym = (data, f) => (data.dias[f] && data.dias[f].gym) || {};
 export function ultimoPeso(data, k, antesDe) {
   let best = null;

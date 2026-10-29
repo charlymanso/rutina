@@ -66,6 +66,31 @@ function toast(msg) {
   const t = h('div', { class: 'toast', role: 'status' }, msg); document.body.append(t); setTimeout(() => t.remove(), 3200);
 }
 
+/* Deslizar hacia la izquierda (móvil) para descubrir "Borrar". Con ratón se sigue usando la × de cada fila. */
+let swipeAbierto = null;
+function deslizable(contenido, onBorrar, etiqueta = 'Borrar', clase = '') {
+  const ANCHO = 88; let x0 = null, y0 = null, dx = 0, mov = false, abierto = false, suprimir = false;
+  const del = h('button', { type: 'button', class: 'swipe-del', tabindex: '-1', 'aria-hidden': 'true', onclick: () => onBorrar() }, etiqueta), dentro = h('div', { class: 'swipe-in' }, contenido), w = h('div', { class: 'swipe' + (clase ? ' ' + clase : '') }, del, dentro);
+  const poner = (v, anim) => { if (v) w.classList.add('abierto'); else setTimeout(() => { if (!dentro.style.transform) w.classList.remove('abierto'); }, 240); dentro.style.transition = anim ? 'transform .2s ease' : 'none'; dentro.style.transform = v ? `translateX(${v}px)` : ''; };
+  const cerrar = () => { abierto = false; poner(0, true); if (swipeAbierto === api) swipeAbierto = null; };
+  const api = { cerrar };
+  dentro.addEventListener('touchstart', (e) => { if (swipeAbierto && swipeAbierto !== api) swipeAbierto.cerrar(); const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; dx = 0; mov = false; }, { passive: true });
+  dentro.addEventListener('touchmove', (e) => {
+    if (x0 == null) return; const t = e.touches[0], ax = t.clientX - x0, ay = t.clientY - y0;
+    if (!mov) { if (Math.abs(ay) > Math.abs(ax) && Math.abs(ay) > 6) { x0 = null; return; } if (Math.abs(ax) < 8) return; mov = true; }
+    dx = Math.max(-ANCHO * 2.2, Math.min(0, (abierto ? -ANCHO : 0) + ax)); poner(dx, false);
+  }, { passive: true });
+  dentro.addEventListener('touchend', () => {
+    if (x0 == null) return; x0 = null; if (!mov) return; suprimir = true; setTimeout(() => { suprimir = false; }, 350);
+    if (dx < -ANCHO * 1.6) { poner(-ANCHO, true); abierto = true; swipeAbierto = api; setTimeout(onBorrar, 120); return; }   // deslizar hasta el final borra
+    abierto = dx < -ANCHO / 2; poner(abierto ? -ANCHO : 0, true); swipeAbierto = abierto ? api : null;
+  });
+  dentro.addEventListener('touchcancel', () => { x0 = null; if (mov) cerrar(); });
+  dentro.addEventListener('click', (e) => { if (suprimir) { e.stopPropagation(); e.preventDefault(); } else if (abierto) { e.stopPropagation(); e.preventDefault(); cerrar(); } }, true);
+  w.deslizar = (v) => { abierto = v < 0; poner(v, true); };   // para pruebas
+  return w;
+}
+
 /* ---------- hojas modales ---------- */
 const sheets = [];
 function sheet({ title, body, save = 'Guardar', onSave, extra, cancel = 'Cancelar', dismissible = true, clase = '' }) {
@@ -172,9 +197,9 @@ function itemsEditor(items, onChange = () => {}) {
     items.forEach((it, i) => {
       const sub = h('div', { class: 'sub-line num' }, macroTxt(L.sumaItems(data, [it])));
       const sel = h('span', { class: 'nm' }, L.ing(data, it[0]).n);
-      box.append(h('div', { class: 'itemblock' }, h('div', { class: 'itemrow' }, sel,
+      box.append(deslizable(h('div', { class: 'itemblock' }, h('div', { class: 'itemrow' }, sel,
         h('input', { type: 'number', min: 0, step: 'any', value: String(it[1]), 'aria-label': 'Cantidad', oninput: (e) => { it[1] = num(e.target.value); sub.textContent = macroTxt(L.sumaItems(data, [it])); onChange(); } }),
-        h('span', { class: 'u' }, L.ing(data, it[0]).u), h('button', { class: 'x', 'aria-label': 'Quitar', onclick: () => { items.splice(i, 1); draw(); onChange(); } }, '×')), sub));
+        h('span', { class: 'u' }, L.ing(data, it[0]).u), h('button', { class: 'x', 'aria-label': 'Quitar', onclick: () => { items.splice(i, 1); draw(); onChange(); } }, '×')), sub), () => { items.splice(i, 1); draw(); onChange(); }));
     });
     box.append(h('button', { class: 'btn sec', id: 'anadir-alimento', style: 'align-self:flex-start', onclick: () => buscarAlimento({ onPick: (id, q) => { items.push([id, q]); draw(); onChange(); } }) }, '+ Añadir alimento'));
   }
@@ -307,6 +332,9 @@ function elegirPlato({ titulo = 'Elegir plato', m = 'comida', actual = '', libre
 }
 
 /* Platos propios: se arman con ingredientes y quedan guardados para usarlos en cualquier comida. */
+function borrarPlato(x) {
+  confirmSheet('¿Borrar este plato?', `“${x.t}” dejará de salir en la lista. Los días del menú que ya lo usan no cambian.`, 'Borrar', () => { data.platosPropios = data.platosPropios.filter((y) => y.t !== x.t); commit(); sheets.slice().forEach((z) => z.close()); toast('Plato borrado.'); });
+}
 function crearPlato(onListo, existente = null) {
   const w = existente ? clone(existente) : { t: '', items: [] }, nombre = h('input', { type: 'text', id: 'nuevo-plato-nombre', value: w0(existente), placeholder: 'Ej. Bowl de pollo y arroz' }), total = h('div', { class: 'macros-live num', id: 'nuevo-plato-total', 'aria-live': 'polite' });
   const pintar = () => { total.textContent = 'Por persona: ' + macroTxt(L.sumaItems(data, w.items)); }, edit = itemsEditor(w.items, pintar); pintar();
@@ -319,7 +347,7 @@ function crearPlato(onListo, existente = null) {
       const pl = { t, items: clone(items) }; if (antes >= 0) data.platosPropios[antes] = pl; else data.platosPropios.push(pl);
       commit(); onListo && onListo(pl);
     },
-    extra: existente ? h('button', { class: 'btn danger', id: 'plato-borrar', onclick: () => confirmSheet('¿Borrar este plato?', `“${existente.t}” dejará de salir en la lista. Los días del menú que ya lo usan no cambian.`, 'Borrar', () => { data.platosPropios = data.platosPropios.filter((x) => x.t !== existente.t); commit(); sheets.slice().forEach((x) => x.close()); toast('Plato borrado.'); }) }, 'Borrar plato') : null });
+    extra: existente ? h('button', { class: 'btn danger', id: 'plato-borrar', onclick: () => borrarPlato(existente) }, 'Borrar plato') : null });
 }
 const w0 = (e) => (e ? e.t : '');
 
@@ -402,11 +430,11 @@ function editSesion(id) {
   }
   const lista = h('div', { class: 'stack', style: 'gap:10px' });
   function draw() {
-    lista.replaceChildren(...s.ej.map((e, i) => h('div', { class: 'exrow' },
+    lista.replaceChildren(...s.ej.map((e, i) => deslizable(h('div', { class: 'exrow' },
       h('input', { type: 'text', value: e.n, placeholder: 'Ejercicio', 'aria-label': 'Ejercicio', oninput: (x) => { e.n = x.target.value; } }),
       h('input', { type: 'text', value: e.s, placeholder: '4×8', 'aria-label': 'Series y repeticiones', oninput: (x) => { e.s = x.target.value; } }),
       h('button', { class: 'btn ' + (e.c ? '' : 'sec'), style: 'padding:6px 10px;font-size:13px', title: 'Apuntar kilos', onclick: () => { e.c = !e.c; draw(); } }, e.c ? 'kg ✓' : 'kg'),
-      h('button', { class: 'x', style: 'color:var(--faint);font-size:20px', 'aria-label': 'Quitar', onclick: () => { s.ej.splice(i, 1); draw(); } }, '×'))),
+      h('button', { class: 'x', style: 'color:var(--faint);font-size:20px', 'aria-label': 'Quitar', onclick: () => { s.ej.splice(i, 1); draw(); } }, '×')), () => { s.ej.splice(i, 1); draw(); })),
       h('button', { class: 'btn sec', style: 'align-self:flex-start', onclick: () => { s.ej.push({ n: '', s: '3×10', c: true }); draw(); } }, '+ Ejercicio'));
   }
   draw(); pintarDias();
@@ -438,9 +466,9 @@ function cambiarEntrenoDia(f, modo = 'cambiar') {
 }
 function anadirEntrenoHoy(f) { if (!data.entreno.sesiones.length) return editSesion(null); cambiarEntrenoDia(f, 'anadir'); }
 function barraEntreno(d, f) {
-  const ses = L.sesionDelDia(data, d), cambiado = L.hayCambioDeEntreno(data, d);
-  return h('div', { class: 'row', style: 'padding:0 4px;min-height:0' }, h('div', { class: 'grow small mute', id: 'entreno-hoy' }, ses ? `Entreno de hoy: ${ses.t}` : 'Hoy toca descanso', cambiado ? ' · cambiado' : ''),
-    h('button', { class: 'btn plain', id: 'cambiar-entreno', onclick: () => (ses ? cambiarEntrenoDia(f) : anadirEntrenoHoy(f)) }, ses ? 'Cambiar entreno' : 'Añadir entreno'));
+  if (L.sesionDelDia(data, d)) return null;   // si hay entreno, se abre y se cambia desde su tarjeta
+  return h('div', { class: 'row', style: 'padding:0 4px;min-height:0' }, h('div', { class: 'grow small mute', id: 'entreno-hoy' }, 'Hoy toca descanso'),
+    h('button', { class: 'btn plain', id: 'cambiar-entreno', onclick: () => anadirEntrenoHoy(f) }, 'Añadir entreno'));
 }
 
 function bienvenida() {
@@ -488,8 +516,8 @@ function extrasCard(f) {
   const ex = L.extrasDe(data, f);
   return h('section', { class: 'stack', style: 'gap:8px' },
     h('div', { class: 'row', style: 'padding:0 4px;min-height:0' }, h('div', { class: 'label grow' }, 'Extras de hoy'), h('button', { class: 'btn plain', id: 'add-extra', onclick: () => anadirExtra(f) }, '+ Añadir comida')),
-    ex.length ? h('div', { class: 'group' }, ex.map((e, i) => h('div', { class: 'row' }, h('div', { class: 'grow' }, e.n, h('div', { class: 'sub num' }, `${f1(e.q)} ${e.u === 'ud' ? 'ud' : e.u} · ${e.k} kcal · P ${f1(e.p)} g`)),
-      h('button', { class: 'chev', 'aria-label': 'Quitar ' + e.n, onclick: () => { ex.splice(i, 1); commit(); } }, '×'))))
+    ex.length ? h('div', { class: 'group' }, ex.map((e, i) => deslizable(h('div', { class: 'row' }, h('div', { class: 'grow' }, e.n, h('div', { class: 'sub num' }, `${f1(e.q)} ${e.u === 'ud' ? 'ud' : e.u} · ${e.k} kcal · P ${f1(e.p)} g`)),
+      h('button', { class: 'chev', 'aria-label': 'Quitar ' + e.n, onclick: () => { ex.splice(i, 1); commit(); } }, '×')), () => { ex.splice(i, 1); commit(); })))
       : h('p', { class: 'mute small', style: 'padding-left:4px' }, 'Lo que comas fuera del plan se suma a tu día.'));
 }
 function macroBar(t) {
@@ -539,6 +567,21 @@ function cambiarComidaHoy(f, d, k) {
     },
     extra: cambiado ? h('button', { class: 'btn danger', id: 'hoy-volver', onclick: () => { const r = diaReg(f); delete r.cambios[k]; if (!Object.keys(r.cambios).length) delete r.cambios; commit(); sheets.slice().forEach((x) => x.close()); toast('Vuelve a lo del plan.'); } }, 'Volver al plan') : null });
 }
+/* Añadir un ejercicio solo a hoy (la sesión del plan no se modifica); se registra su peso como los demás. */
+function anadirEjercicio(f) {
+  const hist = new Set(); data.entreno.sesiones.forEach((x) => x.ej.forEach((e) => hist.add(e.n))); Object.values(data.dias).forEach((r) => (r.ejExtra || []).forEach((e) => hist.add(e.n)));
+  const nom = h('input', { type: 'text', id: 'ej-nombre', list: 'ej-sugerencias', placeholder: 'Ej. Fondos en paralelas', autocomplete: 'off' }), lista = h('datalist', { id: 'ej-sugerencias' }, [...hist].map((n) => h('option', { value: n })));
+  const series = h('input', { type: 'number', id: 'ej-series', min: 1, max: 20, step: 1, inputmode: 'numeric', value: '3' }), reps = h('input', { type: 'text', id: 'ej-reps', value: '10', placeholder: 'Ej. 8, 8-12 o 40 s' });
+  const peso = swt(true, () => { peso.setAttribute('aria-checked', String(peso.getAttribute('aria-checked') !== 'true')); }, 'Lleva peso');
+  sheet({ title: 'Añadir ejercicio', save: 'Añadir', body: [field('Ejercicio', nom), lista, h('div', { class: 'pair' }, field('Series', series), field('Repeticiones', reps)),
+    h('div', { class: 'row', style: 'padding:0;min-height:0' }, h('div', { class: 'grow' }, 'Lleva peso', h('div', { class: 'sub' }, 'Para registrar los kilos que usas.')), peso),
+    h('p', { class: 'mute small' }, 'Solo se añade a hoy: tu sesión del plan no cambia.')],
+  onSave: () => {
+    const n = nom.value.trim(), sr = parseInt(series.value, 10), rp = reps.value.trim(); if (!n) return 'Escribe el nombre del ejercicio.'; if (!(sr >= 1)) return 'Escribe cuántas series.'; if (!rp) return 'Escribe las repeticiones.';
+    if (L.ejerciciosDelDia(data, L.parseISO(f)).some((e) => L.slug(e.n) === L.slug(n))) return 'Ese ejercicio ya está en el entreno de hoy.';
+    const r = diaReg(f); (r.ejExtra ||= []).push({ n, s: `${sr}×${rp}`, c: peso.getAttribute('aria-checked') === 'true' }); commit(); if (S.entrenoGrande) S.entrenoGrande();
+  } });
+}
 /* Vista grande del entreno de hoy: se abre al tocar la tarjeta. Recuerda el último peso de cada ejercicio. */
 function abrirEntrenoHoy(f) {
   const d = L.parseISO(f), cuerpo = h('div', { class: 'stack', style: 'gap:18px' });
@@ -549,41 +592,46 @@ function abrirEntrenoHoy(f) {
     const series = h('input', { type: 'number', id: 'ser-series', min: 1, max: 20, step: 1, inputmode: 'numeric', value: m ? m[1] : '' }), reps = h('input', { type: 'text', id: 'ser-reps', value: m ? m[2] : String(actual), placeholder: 'Ej. 8, 8-12 o 40 s' });
     const plan = swt(false, () => { plan.setAttribute('aria-checked', String(plan.getAttribute('aria-checked') !== 'true')); }, 'Cambiar también en mi plan');
     sheet({ title: e.n, save: 'Guardar', body: [h('div', { class: 'pair' }, field('Series', series), field('Repeticiones', reps)),
-      h('div', { class: 'row', style: 'padding:0;min-height:0' }, h('div', { class: 'grow' }, 'Cambiar también en mi plan', h('div', { class: 'sub' }, `Si no, solo cambia hoy. Plan actual: ${e.s}.`)), plan)],
+      e.extra ? null : h('div', { class: 'row', style: 'padding:0;min-height:0' }, h('div', { class: 'grow' }, 'Cambiar también en mi plan', h('div', { class: 'sub' }, `Si no, solo cambia hoy. Plan actual: ${e.s}.`)), plan)],
       onSave: () => {
         const sr = parseInt(series.value, 10), rp = reps.value.trim(); if (!(sr >= 1)) return 'Escribe cuántas series.'; if (!rp) return 'Escribe las repeticiones.';
         const nuevo = `${sr}×${rp}`;
-        if (plan.getAttribute('aria-checked') === 'true') { e.s = nuevo; guardar(k, { s: null }); commit(); toast('Cambiado en tu plan.'); } else guardar(k, { s: nuevo === e.s ? null : nuevo });
+        if (!e.extra && plan.getAttribute('aria-checked') === 'true') { e.s = nuevo; guardar(k, { s: null }); commit(); toast('Cambiado en tu plan.'); } else guardar(k, { s: nuevo === e.s ? null : nuevo });
       },
       extra: x.s ? h('button', { class: 'btn danger', id: 'ser-volver', onclick: () => { guardar(k, { s: null }); sheets.slice(-1)[0].close(); } }, 'Volver al plan') : null });
   };
-  const fichas = (ses, reg) => ses.ej.map((e) => {
+  const quitarEj = (e, k) => { const r = diaReg(f); if (e.extra) { r.ejExtra = (r.ejExtra || []).filter((x) => L.slug(x.n) !== k); if (!r.ejExtra.length) delete r.ejExtra; } else r.ejQuitar = [...(r.ejQuitar || []), k]; if (r.gym) delete r.gym[k]; commit(); pintar(); toast(`“${e.n}” quitado de hoy.`); };
+  const fichas = (ses, reg) => L.ejerciciosDelDia(data, d).map((e) => {
     const k = L.slug(e.n), x = reg[k] || {}, u = e.c ? L.ultimoPeso(data, k, f) : null;
     const kgActual = x.kg != null ? x.kg : (u ? u.kg : null), sugerido = x.kg == null && !!u;     // si hoy no has puesto nada, se recuerda el de la última vez
     const mover = (delta) => guardar(k, { kg: Math.max(0, Math.round(((kgActual ?? 0) + delta) * 100) / 100) });
     const kg = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off', id: 'kg-' + k, class: 'kg' + (sugerido ? ' sugerido' : ''), 'aria-label': 'Kilos de ' + e.n, placeholder: '—', value: kgActual != null ? L.kgTxt(kgActual) : '', onchange: (ev) => {
       const v = ev.target.value.trim(); if (v === '') return guardar(k, { kg: null });
       const n = num(v, NaN); if (!Number.isFinite(n) || n < 0 || n > 999) return toast('Escribe los kilos como número, por ejemplo 82,5.'); guardar(k, { kg: Math.round(n * 100) / 100 }); } });
-    return h('div', { class: 'ficha' + (x.hecho ? ' hecho' : ''), id: 'ficha-' + k },
+    return deslizable(h('div', { class: 'ficha' + (x.hecho ? ' hecho' : ''), id: 'ficha-' + k },
       h('div', { class: 'ficha-top' },
         h('button', { class: 'chk', id: 'hecho-' + k, 'aria-pressed': String(!!x.hecho), 'aria-label': (x.hecho ? 'Desmarcar ' : 'Marcar como hecho: ') + e.n,
           onclick: () => guardar(k, { hecho: !x.hecho, ...(!x.hecho && x.kg == null && u ? { kg: u.kg } : {}) }) }, icon('check')),   // al marcarlo se guarda el peso recordado
-        h('div', { class: 'grow' }, h('div', { class: 'ficha-nombre' }, e.n),
-          h('button', { type: 'button', class: 'esquema', id: 'esq-' + k, 'aria-label': `Cambiar series y repeticiones de ${e.n}`, onclick: () => editarSeries(ses, e, k, x) }, h('span', { class: 'num' }, x.s || e.s), x.s ? h('span', { class: 'mute small' }, ` · plan ${e.s}`) : null, h('span', { class: 'chev' }, ' ›')))),
+        h('div', { class: 'grow' }, h('div', { class: 'ficha-nombre' }, e.n, e.extra ? h('span', { class: 'tag' }, 'Extra') : null),
+          h('button', { type: 'button', class: 'esquema', id: 'esq-' + k, 'aria-label': `Cambiar series y repeticiones de ${e.n}`, onclick: () => editarSeries(ses, e, k, x) }, h('span', { class: 'num' }, x.s || e.s), x.s && !e.extra ? h('span', { class: 'mute small' }, ` · plan ${e.s}`) : null, h('span', { class: 'chev' }, ' ›'))),
+        h('button', { type: 'button', class: 'x quitar-ej', id: 'quitar-' + k, 'aria-label': 'Quitar ' + e.n + ' de hoy', onclick: () => quitarEj(e, k) }, '×')),
       h('div', { class: 'ficha-campos' },
         e.c ? h('div', { class: 'campo' }, h('span', { class: 'label' }, 'Peso'), h('div', { class: 'kgbox' }, h('button', { type: 'button', class: 'mas', 'aria-label': 'Quitar 2,5 kg', onclick: () => mover(-2.5) }, '−'), kg, h('span', { class: 'kgu' }, 'kg'), h('button', { type: 'button', class: 'mas', 'aria-label': 'Sumar 2,5 kg', onclick: () => mover(2.5) }, '+'))) : null,
         ),
-      u ? h('div', { class: 'mute small' }, `${sugerido ? 'Peso de la última vez' : 'Última vez'}: ${L.kgTxt(u.kg)} kg · ${L.fechaCorta(L.parseISO(u.f))}`) : null);
+      u ? h('div', { class: 'mute small' }, `${sugerido ? 'Peso de la última vez' : 'Última vez'}: ${L.kgTxt(u.kg)} kg · ${L.fechaCorta(L.parseISO(u.f))}`) : null), () => quitarEj(e, k), 'Quitar', 'ficha-sw');
   });
   function pintar() {
     if (!document.body.contains(cuerpo)) return;
     const ses = L.sesionDelDia(data, d); if (!ses) { sh.close(); return; }
-    const reg = L.regGym(data, f), total = ses.ej.length, hechos = ses.ej.filter((e) => reg[L.slug(e.n)] && reg[L.slug(e.n)].hecho).length, terminado = !!L.hechosDe(data, f).gym;
+    const reg = L.regGym(data, f), ejs = L.ejerciciosDelDia(data, d), total = ejs.length, hechos = ejs.filter((e) => reg[L.slug(e.n)] && reg[L.slug(e.n)].hecho).length, quitados = (data.dias[f] && data.dias[f].ejQuitar) || [], terminado = !!L.hechosDe(data, f).gym;
     const cont = cuerpo.parentElement, top = cont ? cont.scrollTop : 0;
     cuerpo.replaceChildren(
       h('div', {}, h('div', { class: 'label' }, `Entreno${ses.min ? ' · ' + ses.min : ''}`), h('h2', { class: 'grande-titulo', id: 'entreno-titulo' }, ses.t),
         h('div', { class: 'row', style: 'padding:8px 0 0;gap:10px;min-height:0' }, h('div', { class: 'bar grow' }, h('i', { style: `width:${total ? Math.round(hechos / total * 100) : 0}%` })), h('span', { class: 'num mute', id: 'entreno-progreso' }, `${hechos} de ${total}`))),
       ...fichas(ses, reg),
+      h('p', { class: 'hint-swipe mute small' }, 'Desliza un ejercicio hacia la izquierda para quitarlo de hoy.'),
+      h('div', { class: 'row', style: 'padding:0;min-height:0;flex-wrap:wrap;gap:4px 12px' }, h('button', { class: 'btn sec', id: 'ej-anadir', onclick: () => anadirEjercicio(f) }, '+ Añadir ejercicio'),
+        quitados.length ? h('button', { class: 'btn plain', id: 'ej-restaurar', onclick: () => { delete diaReg(f).ejQuitar; commit(); pintar(); } }, `Restaurar ${quitados.length} quitado${quitados.length === 1 ? '' : 's'}`) : null),
       h('div', { class: 'stack', style: 'gap:8px' },
         terminado ? h('button', { class: 'btn sec wide', id: 'entreno-reabrir', onclick: () => { toggleHecho(f, 'gym'); pintar(); } }, 'Entreno completado ✓ · Marcar como pendiente')
           : h('button', { class: 'btn wide', id: 'entreno-terminar', onclick: () => { toggleHecho(f, 'gym'); toast('¡Entreno completado!'); sh.close(); } }, 'Terminar entreno'),
@@ -621,8 +669,8 @@ function viewHoy() {
     slots.push({ k: c, hora: esF ? L.fijoOn(data, c).hora : data.menu.horas[c], kind: nombre + (pl.cambiado ? ' · cambiado' : ''), title: pl.libre ? 'Comida libre' : pl.t, det: pl.libre ? 'Que lleve una ración clara de proteína.' : itemsText(pl.items), accion: () => cambiarComidaHoy(f, d, c), aria: 'Ajustar lo de hoy' });
   }
   const ses = L.sesionDelDia(data, d);
-  if (ses) { const reg = L.regGym(data, f), hechasEj = ses.ej.filter((e) => reg[L.slug(e.n)] && reg[L.slug(e.n)].hecho).length;
-    slots.push({ k: 'gym', hora: data.entreno.hora, kind: `Entreno${ses.min ? ' · ' + ses.min : ''}`, title: ses.t, det: `${hechasEj} de ${ses.ej.length} ejercicios`, progreso: ses.ej.length ? hechasEj / ses.ej.length : 0, accion: () => abrirEntrenoHoy(f) }); }
+  if (ses) { const reg = L.regGym(data, f), ejs = L.ejerciciosDelDia(data, d), hechasEj = ejs.filter((e) => reg[L.slug(e.n)] && reg[L.slug(e.n)].hecho).length;
+    slots.push({ k: 'gym', hora: data.entreno.hora, kind: `Entreno${ses.min ? ' · ' + ses.min : ''}${L.hayCambioDeEntreno(data, d) ? ' · cambiado' : ''}`, title: ses.t, det: `${hechasEj} de ${ejs.length} ejercicios`, progreso: ejs.length ? hechasEj / ejs.length : 0, accion: () => abrirEntrenoHoy(f) }); }
   slots.sort((a, b) => L.minutos(a.hora) - L.minutos(b.hora));
   const now = new Date(), nm = now.getHours() * 60 + now.getMinutes(), sig = slots.find((s) => !hechos[s.k] && L.minutos(s.hora) >= nm - 60), hechas = slots.filter((s) => hechos[s.k]).length;
 
@@ -704,9 +752,9 @@ function viewCompra() {
     return h('section', { class: 'stack', style: 'gap:8px' }, h('h2', { class: 'sec', style: 'font-size:17px' }, nombre),
       h('div', { class: 'group' }, its.map((i) => h('button', { class: 'item', 'aria-pressed': String(!!marc[i]), onclick: () => { const c = (data.compra[k] ||= { marcados: {} }); if (c.marcados[i]) delete c.marcados[i]; else c.marcados[i] = true; commit(); } },
         h('span', { class: 'box', 'aria-hidden': 'true', 'aria-pressed': String(!!marc[i]) }, icon('check')), h('span', { class: 'nm' }, L.ing(data, i).n), h('span', { class: 'q' }, L.cantidadCompra(data, i, tot[i])))),
-        xs.map((x) => h('div', { class: 'xrow' }, h('button', { class: 'item extra', 'aria-pressed': String(!!x.ok), onclick: () => { x.ok = !x.ok; commit(); } },
+        xs.map((x) => deslizable(h('div', { class: 'xrow' }, h('button', { class: 'item extra', 'aria-pressed': String(!!x.ok), onclick: () => { x.ok = !x.ok; commit(); } },
           h('span', { class: 'box', 'aria-hidden': 'true', 'aria-pressed': String(!!x.ok) }, icon('check')), h('span', { class: 'nm' }, x.n, h('span', { class: 'tag' }, 'Extra')), h('span', { class: 'q' }, x.q || '')),
-          h('button', { class: 'chev xdel', 'aria-label': 'Quitar ' + x.n, onclick: () => { data.extrasCompra = data.extrasCompra.filter((y) => y !== x); commit(); } }, '×')))));
+          h('button', { class: 'chev xdel', 'aria-label': 'Quitar ' + x.n, onclick: () => { data.extrasCompra = data.extrasCompra.filter((y) => y !== x); commit(); } }, '×')), () => { data.extrasCompra = data.extrasCompra.filter((y) => y !== x); commit(); }))));
   }).filter(Boolean);
   return h('div', { class: 'page' },
     h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, 'Compra'), h('p', { class: 'subtitle num' }, `${hechos} de ${total} en el carro`)),
@@ -758,7 +806,7 @@ function viewAjustes() {
       return subpagina('Platos', 'Arma platos con tus ingredientes y úsalos en cualquier comida',
         h('div', { class: 'row', style: 'padding:0;gap:10px;flex-wrap:wrap' }, h('button', { class: 'btn', id: 'plato-nuevo', onclick: () => crearPlato() }, 'Nuevo plato'),
           delMenu.length ? h('button', { class: 'btn sec', id: 'platos-importar', onclick: () => { delMenu.forEach((x) => data.platosPropios.push({ t: x.t, items: clone(x.items) })); commit(); toast(`${delMenu.length} ${delMenu.length === 1 ? 'plato guardado' : 'platos guardados'}.`); } }, 'Guardar los de mi menú') : null),
-        ps.length ? h('div', { class: 'group', id: 'platos-lista' }, ps.map((x) => tapRow(x.t, macroTxt(L.sumaItems(data, x.items)), () => crearPlato(null, x)))) : h('p', { class: 'mute small', id: 'platos-vacio', style: 'padding-left:4px' }, 'Aún no tienes platos guardados. Crea uno nuevo' + (delMenu.length ? ' o guarda los que ya tienes en tu menú.' : '.')));
+        ps.length ? h('div', { class: 'group', id: 'platos-lista' }, ps.map((x) => deslizable(tapRow(x.t, macroTxt(L.sumaItems(data, x.items)), () => crearPlato(null, x)), () => borrarPlato(x)))) : h('p', { class: 'mute small', id: 'platos-vacio', style: 'padding-left:4px' }, 'Aún no tienes platos guardados. Crea uno nuevo' + (delMenu.length ? ' o guarda los que ya tienes en tu menú.' : '.')));
     }
     case 'datos': return subpagina('Datos y copias', 'Tu plan y tus registros',
       grupo(null, tapRow('Guardar una copia', 'Exporta todo a un archivo.', async () => { if (await store.exportar(data)) toast('Copia guardada.'); }),

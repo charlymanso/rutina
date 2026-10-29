@@ -376,3 +376,18 @@ button{-webkit-user-select:none;user-select:none}
 
 .bar.over i{background:var(--red)}
 b.over,.metric .over{color:var(--red)}
+
+/* Deslizar para borrar (móvil) */
+.swipe{position:relative;overflow:hidden}
+.swipe+.swipe{border-top:1px solid var(--line)}
+.swipe-in{position:relative;background:var(--swbg,var(--card));touch-action:pan-y;will-change:transform}
+.swipe-del{position:absolute;top:0;right:0;bottom:0;left:0;background:var(--red);color:#fff;font-weight:600;font-size:15px;border:0;display:none;justify-items:end;align-items:center;padding-right:22px}
+.swipe.abierto .swipe-del{display:grid}
+.swipe.ficha-sw{--swbg:var(--bg);border-radius:16px}
+.swipe.ficha-sw+.swipe{border-top:0}
+.ficha .quitar-ej{align-self:flex-start;color:var(--faint);font-size:20px;line-height:1;width:28px;height:28px}
+@media(hover:none){.ficha .quitar-ej{display:none}}
+
+.ficha-nombre .tag{display:inline-block;margin-left:8px;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-soft);vertical-align:3px}
+.hint-swipe{display:none;text-align:center}
+@media(hover:none){.hint-swipe{display:block}}
