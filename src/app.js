@@ -430,9 +430,9 @@ function editSesion(id) {
   function pintarDias() {
     dias.replaceChildren(...L.DIAS.map((nombre, i) => { const on = s.dias.includes(i);
       return h('button', { type: 'button', class: 'chipopt', id: 'ses-dia-' + i, 'aria-pressed': String(on), 'aria-label': nombre, onclick: () => { s.dias = on ? s.dias.filter((x) => x !== i) : [...s.dias, i].sort(); pintarDias(); } }, nombre.slice(0, 3)); }));
-    const choques = s.dias.map((i) => ({ i, otra: L.sesionGym(data, i) })).filter((x) => x.otra && x.otra.id !== s.id);
+    const choques = s.dias.map((i) => ({ i, otra: L.sesionesGym(data, i).find((x) => x.id !== s.id) })).filter((x) => x.otra);
     aviso.textContent = !s.dias.length ? 'Sin días fijos: la sesión no se programa sola, pero podrás usarla cuando quieras desde Hoy.'
-      : choques.length ? `Esos días pasarán a esta sesión: ${choques.map((x) => `${L.DIAS[x.i].toLowerCase()} (antes “${x.otra.t}”)`).join(', ')}.` : `Se repite ${L.diasTexto(s.dias).toLowerCase()}.`;
+      : choques.length ? `${choques.map((x) => `El ${L.DIAS[x.i].toLowerCase()} ya tiene “${x.otra.t}”`).join('; ')}: se harán juntas, como un solo entreno.` : `Se repite ${L.diasTexto(s.dias).toLowerCase()}.`;
   }
   const lista = h('div', { class: 'stack', style: 'gap:10px' });
   function draw() {
@@ -450,7 +450,7 @@ function editSesion(id) {
       let min = '';
       if (durValor.value.trim() !== '') { const n = num(durValor.value, NaN); if (!(n > 0)) return 'Escribe la duración con números, por ejemplo 60 o 1,5.'; if (durUnidad.value === 'min' && n > 600) return 'Son más de 10 horas. Cambia la unidad a horas.'; if (durUnidad.value === 'h' && n > 10) return 'La duración máxima es de 10 horas.'; min = `${L.kgTxt(Math.round(n * 100) / 100)} ${durUnidad.value === 'h' ? 'h' : 'min'}`; }
       const nueva = { id: s.id, dias: [...s.dias].sort(), t: t.value.trim(), min, ej: s.ej.filter((e) => e.n.trim()).map((e) => ({ n: e.n.trim(), s: e.s.trim(), c: !!e.c })) };
-      const otras = data.entreno.sesiones.filter((x) => x.id !== s.id).map((x) => ({ ...x, dias: (x.dias || []).filter((d) => !nueva.dias.includes(d)) }));   // un día solo puede tener una sesión
+      const otras = data.entreno.sesiones.filter((x) => x.id !== s.id);   // varias sesiones pueden compartir día
       const primero = (x) => (x.dias.length ? Math.min(...x.dias) : 9);
       data.entreno.sesiones = [...otras, nueva].sort((a, b) => primero(a) - primero(b)); commit();
     },
@@ -461,7 +461,7 @@ function editSesion(id) {
 /* Cambiar el entreno de un día concreto sin tocar tu plan semanal */
 function cambiarEntrenoDia(f, modo = 'cambiar') {
   const d = L.parseISO(f), actual = L.sesionDelDia(data, d), plan = L.sesionGym(data, L.idxDia(d)), cambiado = L.hayCambioDeEntreno(data, d), anadir = modo === 'anadir';
-  const poner = (valor) => { const dr = diaReg(f); delete dr.bloques; if ((valor === 'descanso' && !plan) || (valor && plan && valor === plan.id)) delete dr.entreno; else dr.entreno = valor; sh.close(); commit(); if (S.entrenoGrande) S.entrenoGrande(); toast(valor === 'descanso' ? 'Hoy toca descanso.' : anadir ? 'Entreno añadido.' : 'Entreno cambiado.'); };
+  const poner = (valor) => { const dr = diaReg(f); delete dr.bloques; delete dr.bloquesQuitar; if ((valor === 'descanso' && !plan) || (valor && plan && valor === plan.id)) delete dr.entreno; else dr.entreno = valor; sh.close(); commit(); if (S.entrenoGrande) S.entrenoGrande(); toast(valor === 'descanso' ? 'Hoy toca descanso.' : anadir ? 'Entreno añadido.' : 'Entreno cambiado.'); };
   const fila = (id, titulo, sub, activa) => h('button', { class: 'row tap', type: 'button', id: 'cambiar-' + id, 'aria-pressed': String(activa), onclick: () => poner(id) }, h('div', { class: 'grow' }, titulo, sub ? h('div', { class: 'sub' }, sub) : null), h('span', { class: 'chev', style: 'color:var(--accent);font-weight:700' }, activa ? '✓' : ''));
   const sh = sheet({ title: anadir ? 'Añadir entreno' : 'Entreno de hoy', body: [
     h('p', { class: 'mute small' }, anadir ? 'Elige la sesión que vas a hacer hoy. Solo cambia este día; tu plan semanal no se toca. Tu objetivo de calorías de hoy se ajusta.'
@@ -595,7 +595,7 @@ function anadirBloque(f) {
   const sh = sheet({ title: 'Añadir otra sesión', cancel: 'Cerrar', body: [
     h('p', { class: 'mute small' }, `Se suma a “${ses.t}” y se apunta todo junto en un solo entreno. Solo vale para hoy: tus sesiones no cambian.`),
     opciones.length ? h('div', { class: 'group' }, opciones.map((x) => h('button', { type: 'button', class: 'row tap', id: 'sumar-' + x.id, onclick: () => {
-      sh.close(); const r = diaReg(f); r.bloques = [...(r.bloques || []), x.id]; commit(); if (S.entrenoGrande) S.entrenoGrande(); toast(`“${x.t}” sumada al entreno de hoy.`);
+      sh.close(); const r = diaReg(f); r.bloques = [...(r.bloques || []), x.id]; if (r.bloquesQuitar) { r.bloquesQuitar = r.bloquesQuitar.filter((id) => id !== x.id); if (!r.bloquesQuitar.length) delete r.bloquesQuitar; } commit(); if (S.entrenoGrande) S.entrenoGrande(); toast(`“${x.t}” sumada al entreno de hoy.`);
     } }, h('div', { class: 'grow' }, x.t, h('div', { class: 'sub' }, `${x.ej.length} ejercicio${x.ej.length === 1 ? '' : 's'}${x.min ? ' · ' + x.min : ''}`)), h('span', { class: 'chev' }, '+'))))
       : h('p', { class: 'mute small', id: 'bloque-vacio' }, 'No tienes más sesiones para sumar. Crea una, por ejemplo “Brazo” o “Cardio”, y aparecerá aquí.')],
     extra: h('button', { class: 'btn plain', id: 'bloque-nueva', onclick: () => { sh.close(); editSesion(null); } }, 'Crear una sesión nueva…') });
@@ -644,10 +644,12 @@ function abrirEntrenoHoy(f) {
       u ? h('div', { class: 'mute small' }, `${sugerido ? 'Peso de la última vez' : 'Última vez'}: ${L.kgTxt(u.kg)} kg · ${L.fechaCorta(L.parseISO(u.f))}`) : null), () => quitarEj(e, k), 'Quitar', 'ficha-sw');
   });
   const quitarBloque = (b, ejsBloque) => {
-    const r = diaReg(f), antesBl = [...(r.bloques || [])], regs = {};
+    const r = diaReg(f), antes = { bl: r.bloques ? [...r.bloques] : undefined, qu: r.bloquesQuitar ? [...r.bloquesQuitar] : undefined }, regs = {};
     for (const e of ejsBloque) { const k = L.slug(e.n); if (r.gym && r.gym[k]) { regs[k] = { ...r.gym[k] }; delete r.gym[k]; } }
-    r.bloques = antesBl.filter((id) => id !== b.id); if (!r.bloques.length) delete r.bloques; commit(); pintar();
-    toast(`“${b.t}” quitada de hoy.`, () => { const q = diaReg(f); q.bloques = antesBl; q.gym = { ...(q.gym || {}), ...regs }; commit(); pintar(); });
+    r.bloques = (r.bloques || []).filter((id) => id !== b.id); if (!r.bloques.length) delete r.bloques;
+    if (L.sesionesGym(data, L.idxDia(d)).some((x) => x.id === b.id)) r.bloquesQuitar = [...(r.bloquesQuitar || []), b.id];   // era una sesión programada ese día: se oculta solo hoy
+    commit(); pintar();
+    toast(`“${b.t}” quitada de hoy.`, () => { const q = diaReg(f); if (antes.bl) q.bloques = antes.bl; else delete q.bloques; if (antes.qu) q.bloquesQuitar = antes.qu; else delete q.bloquesQuitar; q.gym = { ...(q.gym || {}), ...regs }; commit(); pintar(); });
   };
   function pintar() {
     if (!document.body.contains(cuerpo)) return;

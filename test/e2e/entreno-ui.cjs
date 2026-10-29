@@ -6,7 +6,7 @@ async function nuevo(b, datos = null) {
   const ctx = await b.newContext({ viewport: { width: 1180, height: 900 } }); const errs = [];
   await ctx.route(BASE + '/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: "export const NUBE={url:'',anonKey:'',google:false};" })); await ctx.route(/open-meteo|api\.github|supabase/, (r) => r.abort());
   const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message)); p.errs = errs;
-  await p.addInitScript((datos) => { window.rutina = { platform: 'win32', load: async () => { try { return JSON.parse(localStorage.getItem('stub')) || datos; } catch { return datos; } }, save: async (x) => { localStorage.setItem('stub', JSON.stringify(x)); return true; } }; }, datos);
+  await p.addInitScript((datos) => { window.rutina = { platform: 'win32', load: async () => { try { return JSON.parse(localStorage.getItem('stub')) || datos; } catch { return datos; } }, save: async (x) => { if (localStorage.getItem('congelar')) return true; localStorage.setItem('stub', JSON.stringify(x)); return true; } }; }, datos);
   await p.goto(BASE + '/index.html'); return p;
 }
 const num = (t) => parseInt(String(t).replace(/\./g, '').match(/(\d+)/)[1], 10);
@@ -14,6 +14,9 @@ const num = (t) => parseInt(String(t).replace(/\./g, '').match(/(\d+)/)[1], 10);
   const b = await chromium.launch(); let p = await nuevo(b); await p.waitForSelector('.sheet'); await p.click('text=Empezar con un plan de ejemplo'); await p.waitForSelector('.slot');
   const hoyIdx = await p.evaluate(() => (new Date().getDay() + 6) % 7), otro = (hoyIdx + 1) % 7;
   const objHoy = async () => num(await p.textContent('.metric:has-text("Energía") .top'));
+  // El plan de ejemplo programa entrenos lun/mié/vie. Para esta parte, hoy no tiene sesión programada (así "Full body" es la única de hoy sea cual sea el día)
+  await p.waitForTimeout(500); await p.evaluate((hoy) => { const dd = JSON.parse(localStorage.getItem('stub')); dd.entreno.sesiones.forEach((x) => { x.dias = (x.dias || []).filter((i) => i !== hoy); }); dd.dias = {}; localStorage.setItem('congelar', '1'); localStorage.setItem('stub', JSON.stringify(dd)); }, hoyIdx);
+  await p.reload(); await p.waitForSelector('#entreno-hoy, #slot-gym'); await p.evaluate(() => localStorage.removeItem('congelar'));
   // ---- Nueva sesión en varios días ----
   await p.click('nav >> text=Entreno'); await p.click('#nueva-sesion'); await p.waitForSelector('#ses-dias');
   ok(await p.locator('#ses-dias .chipopt').count() === 7, 'El editor ofrece los 7 días como botones');
@@ -21,12 +24,12 @@ const num = (t) => parseInt(String(t).replace(/\./g, '').match(/(\d+)/)[1], 10);
   ok((await p.textContent('#ses-aviso')).includes('Sin días fijos'), 'Sin días elegidos: explica que se puede usar desde Hoy');
   for (const i of new Set([hoyIdx, otro, 6])) await p.click('#ses-dia-' + i);
   const unDiaOcupado = [0, 2, 4].find((i) => ![hoyIdx, otro, 6].includes(i)); if (unDiaOcupado != null && (await p.getAttribute('#ses-dia-' + unDiaOcupado, 'aria-pressed')) !== 'true') await p.click('#ses-dia-' + unDiaOcupado);
-  ok((await p.textContent('#ses-aviso')).includes('pasarán a esta sesión'), 'Elegir un día ya ocupado avisa de a quién se lo quita: ' + (await p.textContent('#ses-aviso')).slice(0, 70));
+  ok((await p.textContent('#ses-aviso')).includes('se harán juntas'), 'Elegir un día ya ocupado avisa de a quién se lo quita: ' + (await p.textContent('#ses-aviso')).slice(0, 70));
   await p.fill('.sheet input[type=text] >> nth=0', 'Full body'); await p.click('.sheet >> text=+ Ejercicio'); await p.fill('.exrow input >> nth=0', 'Dominadas'); await p.click('.sheet header .btn:not(.plain)'); await p.waitForTimeout(200);
   const tarjeta = await p.textContent('section.card:has-text("Full body") .label'); ok(tarjeta.includes('y '), 'La tarjeta muestra varios días: ' + tarjeta.slice(0, 60));
   ok((await p.textContent('.subtitle')).includes('4 sesiones'), 'Subtítulo cuenta sesiones y días: ' + (await p.textContent('.subtitle')));
-  // un día solo tiene una sesión: la de plantilla que tenía ese día lo pierde
-  if (unDiaOcupado != null) ok(!(await p.textContent('section.card:has-text("Empuje") .label, section.card:has-text("Tirón") .label, section.card:has-text("Pierna") .label')).includes('Sin día fijo') || true, 'Las otras sesiones se reordenan sin duplicar días');
+  // varias sesiones pueden compartir día: la de plantilla que tenía ese día NO lo pierde
+  if (unDiaOcupado != null) { const juntas = await p.evaluate((dia) => JSON.parse(localStorage.getItem('stub')).entreno.sesiones.filter((x) => (x.dias || []).includes(dia)).map((x) => x.t), unDiaOcupado); ok(juntas.length >= 2 && juntas.includes('Full body'), 'Un mismo día puede tener varias sesiones: ' + juntas.join(' + ')); }
   // ---- Hoy: la sesión nueva sale hoy ----
   await p.click('nav >> text=Hoy'); await p.waitForSelector('#slot-gym'); ok(await p.locator('#cambiar-entreno').count() === 0, 'Con entreno programado no hay botón suelto de cambiar'); ok((await p.textContent('.slot:has-text("Entreno") h3')) === 'Full body', 'Hoy muestra la sesión de varios días');
   const kFull = await objHoy();

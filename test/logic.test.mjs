@@ -174,6 +174,22 @@ assert.equal(L.esVersionNueva('0.1.10', 'v0.1.9'), false);
     assert.equal(dd.filter((e) => L.slug(e.n) === L.slug(base.ej[0].n)).length, 1, 'ejercicio repetido solo una vez'); assert.ok(dd.some((e) => e.n === 'Nuevo' && e.bloque === 'zz'));
     assert.deepEqual(normalize({ dias: { a: { bloques: ['x', 3, ''] }, b: { bloques: 'mal' } } }).dias, { a: { bloques: ['x'] }, b: {} }, 'normalize limpia los bloques');
   }
+  // dos sesiones programadas el mismo día
+  {
+    const m = makeTemplate(); m.menu.ancla = '2026-10-26'; const [a, b, c] = m.entreno.sesiones, mar = L.parseISO('2026-10-27'), fM = L.iso(mar);
+    assert.equal(L.sesionDelDia(m, mar), null, 'martes es descanso en la plantilla');
+    a.dias = [...a.dias, 1]; b.dias = [...b.dias, 1];
+    assert.deepEqual(L.sesionesGym(m, 1).map((x) => x.id), [a.id, b.id]); assert.equal(L.sesionDelDia(m, mar).id, a.id, 'la principal es la primera');
+    assert.deepEqual(L.bloquesDelDia(m, mar).map((x) => x.id), [b.id], 'la otra se suma sola');
+    assert.equal(L.tituloEntreno(m, mar), `${a.t} + ${b.t}`);
+    assert.equal(L.ejerciciosDelDia(m, mar).length, new Set([...a.ej, ...b.ej].map((e) => L.slug(e.n))).size, 'ejercicios de las dos, sin repetir');
+    m.dias[fM] = { hechos: {}, bloquesQuitar: [b.id] }; assert.deepEqual(L.bloquesDelDia(m, mar), [], 'se puede quitar la sesión programada solo ese día');
+    m.dias[fM] = { hechos: {}, bloquesQuitar: [b.id], bloques: [b.id] }; assert.deepEqual(L.bloquesDelDia(m, mar).map((x) => x.id), [b.id], 'y volver a sumarla');
+    m.dias[fM] = { hechos: {}, entreno: c.id }; assert.deepEqual(L.bloquesDelDia(m, mar), [], 'si hoy eliges otra sesión, las programadas dejan de sumarse');
+    m.dias[fM] = { hechos: {}, entreno: c.id, bloques: [a.id] }; assert.deepEqual(L.bloquesDelDia(m, mar).map((x) => x.id), [a.id], 'solo las que sumes a mano');
+    assert.equal(L.diasEntrenoSemana(m), new Set(m.entreno.sesiones.flatMap((x) => x.dias)).size, 'los días de entreno cuentan días distintos');
+    assert.deepEqual(normalize({ dias: { a: { bloquesQuitar: ['x', 1] }, b: { bloquesQuitar: 3 } } }).dias, { a: { bloquesQuitar: ['x'] }, b: {} });
+  }
   // extras de la compra
   const c = makeTemplate(); c.extrasCompra = [{ id: 'x1', n: 'Papel de cocina', q: '2 packs', s: 'otros', ok: false }, { id: 'x2', n: 'Pollo extra', q: '', s: 'carne', ok: false }];
   const txt = L.textoCompra(c, 2); assert.ok(txt.includes('OTROS') && txt.includes('- Papel de cocina: 2 packs') && txt.includes('- Pollo extra'), 'copiar lista incluye extras');

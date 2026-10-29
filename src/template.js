@@ -79,6 +79,7 @@ export function normalize(raw) {
     } else delete r.cambios;
     if (Array.isArray(r.ejExtra)) { r.ejExtra = r.ejExtra.filter((e) => e && typeof e.n === 'string' && e.n.trim()); if (!r.ejExtra.length) delete r.ejExtra; } else delete r.ejExtra;
     if (!Array.isArray(r.ejQuitar)) delete r.ejQuitar;
+    if (Array.isArray(r.bloquesQuitar)) { r.bloquesQuitar = r.bloquesQuitar.filter((x) => typeof x === 'string' && x); if (!r.bloquesQuitar.length) delete r.bloquesQuitar; } else delete r.bloquesQuitar;
     if (Array.isArray(r.bloques)) { r.bloques = r.bloques.filter((x) => typeof x === 'string' && x); if (!r.bloques.length) delete r.bloques; } else delete r.bloques;
     if (!Array.isArray(r.extras)) delete r.extras;
   }

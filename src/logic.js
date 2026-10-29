@@ -32,7 +32,8 @@ export const diaMenu = (data, d) => semanaDe(data, lunesDe(d))[idxDia(d)] || nul
 // Una sesión tiene uno o varios días fijos (dias) o ninguno (se usa cuando quieras). Un día concreto puede cambiarse
 // sin tocar el plan: data.dias[fecha].entreno = id de otra sesión, o 'descanso'.
 export const sesionPorId = (data, id) => data.entreno.sesiones.find((x) => x.id === id) || null;
-export const sesionGym = (data, i) => data.entreno.sesiones.find((x) => (x.dias || []).includes(i)) || null; // plan fijo de un día de la semana
+export const sesionesGym = (data, i) => data.entreno.sesiones.filter((x) => (x.dias || []).includes(i));   // un día puede tener varias sesiones: se hacen juntas
+export const sesionGym = (data, i) => sesionesGym(data, i)[0] || null; // la principal del plan fijo de un día de la semana
 export function sesionDelDia(data, d) {
   const o = data.dias[iso(d)] && data.dias[iso(d)].entreno;
   if (o === 'descanso') return null;
@@ -160,8 +161,11 @@ export const hechosDe = (data, f) => (data.dias[f] && data.dias[f].hechos) || {}
 // Otras sesiones sumadas al entreno de hoy ("bloques", p. ej. Brazo o Cardio además de Pecho). Solo valen ese día; el plan no cambia.
 export function bloquesDelDia(data, d) {
   const ses = sesionDelDia(data, d); if (!ses) return [];
-  const ids = (data.dias[iso(d)] || {}).bloques; if (!Array.isArray(ids)) return [];
-  return [...new Set(ids)].map((id) => data.entreno.sesiones.find((x) => x.id === id)).filter((x) => x && x.id !== ses.id);
+  const r = data.dias[iso(d)] || {}, quitadas = Array.isArray(r.bloquesQuitar) ? r.bloquesQuitar : [];
+  const plan = r.entreno ? [] : sesionesGym(data, idxDia(d)).filter((x) => !quitadas.includes(x.id));   // las demás sesiones programadas ese día (si hoy no elegiste otra)
+  const suma = (Array.isArray(r.bloques) ? r.bloques : []).map((id) => sesionPorId(data, id));                // y las que sumaste solo para hoy
+  const vistos = new Set([ses.id]);
+  return [...plan, ...suma].filter((x) => x && !vistos.has(x.id) && vistos.add(x.id));
 }
 export const tituloEntreno = (data, d) => { const ses = sesionDelDia(data, d); return ses ? [ses, ...bloquesDelDia(data, d)].map((x) => x.t).join(' + ') : ''; };
 // Ejercicios de un día: los de la sesión, los de los bloques sumados, menos los que quitaste hoy, y los que añadiste solo para hoy. El plan no se toca.
