@@ -10,7 +10,7 @@ const http = require('http'), fs = require('fs'), path = require('path'), os = r
 const raiz = path.join(__dirname, '..', '..'), src = path.join(raiz, 'src');
 const arg = (n) => { const a = process.argv.find((x) => x === '--' + n || x.startsWith('--' + n + '=')); return a ? (a.includes('=') ? a.split('=')[1] : true) : null; };
 const TIPOS = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
-const SUITES = [['comida', ''], ['comidas-ui', ''], ['plato-ui', ''], ['hoy-ui', ''], ['hoy-cambio', ''], ['entreno-ui', ''], ['entreno-hoy', ''], ['entreno-bloques', ''], ['entreno-dias', ''], ['nav-dur', ''], ['compra-ui', ''], ['hogar', ''], ['ajustes-ui', ''], ['objetivo-ui', ''], ['gate2', ''], ['pwa', 'copia'], ['google-ventana', ''], ['scan-ui', 'red']];
+const SUITES = [['comida', ''], ['comidas-ui', ''], ['plato-ui', ''], ['hoy-ui', ''], ['hoy-cambio', ''], ['entreno-ui', ''], ['entreno-hoy', ''], ['entreno-bloques', ''], ['entreno-dias', ''], ['nav-dur', ''], ['compra-ui', ''], ['hogar', ''], ['cocinar', ''], ['ajustes-ui', ''], ['objetivo-ui', ''], ['gate2', ''], ['pwa', 'copia'], ['google-ventana', ''], ['scan-ui', 'red']];
 
 function servir(dir) {
   return new Promise((ok) => {

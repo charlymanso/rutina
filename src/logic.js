@@ -134,11 +134,12 @@ export const COMIDAS_HOGAR = [['desayuno', 'Desayuno'], ['media', 'Media mañana
 export const hogar = (data) => (Array.isArray(data.perfil.hogar) ? data.perfil.hogar : []);
 // Lo que hay que comprar de un ingrediente para una comida: lo tuyo más la ración de cada persona que la comparte.
 // Con cosas por unidades se redondea hacia arriba (2 fajitas al 70 % → 2 fajitas), porque nadie se come 1,4.
-export function paraTodos(data, id, q, m) {
-  const ud = ing(data, id).u === 'ud'; let t = q;
-  for (const p of hogar(data)) if ((p.comidas || []).includes(m)) { const x = q * p.f; t += ud && x >= 1 ? Math.ceil(x - 1e-9) : x; }
-  return t;
+export function repartoHogar(data, id, q, m) {
+  const ud = ing(data, id).u === 'ud', out = [{ n: 'Tú', q }];
+  for (const p of hogar(data)) if ((p.comidas || []).includes(m)) { const x = q * p.f; out.push({ n: p.n, q: ud && x >= 1 ? Math.ceil(x - 1e-9) : x }); }
+  return out;
 }
+export const paraTodos = (data, id, q, m) => repartoHogar(data, id, q, m).reduce((a, x) => a + x.q, 0);
 export function listaCompra(data, sel, desde = hoy()) {
   if (sel === 2) {
     const a = listaCompra(data, 0, desde), b = listaCompra(data, 1, desde);

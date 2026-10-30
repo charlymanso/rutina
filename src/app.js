@@ -573,9 +573,24 @@ function slotEl(s, f, ahora, hecho) {
     s.progreso != null ? h('div', { class: 'bar', style: 'margin-top:8px' }, h('i', { style: `width:${Math.round(s.progreso * 100)}%` })) : null];
   return h('div', { class: 'slot' + (hecho ? ' hecho' : '') + (s.k === ahora ? ' ahora' : '') },
     h('span', { class: 'hora' }, s.hora),
-    s.accion ? h('button', { class: 'slot-main', id: 'slot-' + s.k, type: 'button', onclick: s.accion, 'aria-label': `${s.kind}: ${s.title}. ${s.aria || 'Abrir'}` }, ...contenido)
+    s.accion ? h('div', { class: 'slot-col' }, h('button', { class: 'slot-main', id: 'slot-' + s.k, type: 'button', onclick: s.accion, 'aria-label': `${s.kind}: ${s.title}. ${s.aria || 'Abrir'}` }, ...contenido), s.extra || null)
       : h('div', {}, ...contenido, s.extra || null),
     h('button', { class: 'chk', 'aria-pressed': String(hecho), 'aria-label': (hecho ? 'Desmarcar: ' : 'Marcar como hecho: ') + s.kind, onclick: () => toggleHecho(f, s.k) }, icon('check')));
+}
+/* Para cocinar: las cantidades del plato de hoy para todos los que comen, con el reparto de cada uno y casillas para ir marcando. */
+function cocinar(d, k) {
+  const pl = L.platoDelDia(data, d, k); if (!pl || pl.libre) return;
+  const quien = L.hogar(data).filter((x) => x.comidas.includes(k)).map((x) => x.n), marcados = new Set(), lista = h('div', { class: 'group cocinar', id: 'cocinar-lista' });
+  const pintar = () => lista.replaceChildren(...pl.items.map(([id, q], i) => {
+    const rep = L.repartoHogar(data, id, q, k), tot = rep.reduce((a, x) => a + x.q, 0), on = marcados.has(i);
+    return h('button', { type: 'button', class: 'item', 'aria-pressed': String(on), onclick: () => { on ? marcados.delete(i) : marcados.add(i); pintar(); } },
+      h('span', { class: 'box', 'aria-hidden': 'true', 'aria-pressed': String(on) }, icon('check')),
+      h('span', { class: 'nm' }, h('span', { class: 'nm-t' }, L.ing(data, id).n), rep.length > 1 ? h('small', { class: 'reparto' }, rep.map((x) => `${x.n} ${L.cantidadCompra(data, id, x.q)}`).join(' · ')) : null),
+      h('span', { class: 'q' }, L.cantidadCompra(data, id, tot)));
+  }));
+  pintar();
+  sheet({ title: 'Para cocinar', cancel: 'Cerrar', body: [h('div', {}, h('div', { class: 'label' }, `${NOMBRE_COMIDA[k]} · para ${[ 'ti', ...quien ].join(' y ')}`), h('h2', { class: 'grande-titulo', id: 'cocinar-titulo', style: 'font-size:24px' }, pl.t)),
+    lista, h('p', { class: 'mute small' }, 'Cantidades totales para cocinar y, debajo de cada una, lo que le toca a cada persona. Toca un ingrediente para ir marcándolo.')] });
 }
 /* Ajustar lo que comes hoy: otro plato y/o otras cantidades, solo para hoy (el plan no se toca). */
 const PORCIONES = [[0.5, '½'], [0.75, '¾'], [1, '1×'], [1.25, '1¼'], [1.5, '1½'], [2, '2×']];
@@ -735,7 +750,8 @@ function viewHoy() {
   const d = L.hoy(), f = L.iso(d), dm = L.diaMenu(data, d), hechos = L.hechosDe(data, f), slots = [];
   for (const [c, nombre] of [['desayuno', 'Desayuno'], ['media', 'Media mañana'], ['comida', 'Comida'], ['merienda', 'Merienda'], ['cena', 'Cena']]) {
     const pl = L.platoDelDia(data, d, c); if (!pl) continue; const esF = L.FIJAS.includes(c);
-    slots.push({ k: c, hora: esF ? L.fijoOn(data, c).hora : data.menu.horas[c], kind: nombre + (pl.cambiado ? ' · cambiado' : ''), title: pl.libre ? 'Comida libre' : pl.t, det: pl.libre ? 'Que lleve una ración clara de proteína.' : itemsText(pl.items), accion: () => cambiarComidaHoy(f, d, c), aria: 'Ajustar lo de hoy' });
+    slots.push({ k: c, hora: esF ? L.fijoOn(data, c).hora : data.menu.horas[c], kind: nombre + (pl.cambiado ? ' · cambiado' : ''), title: pl.libre ? 'Comida libre' : pl.t, det: pl.libre ? 'Que lleve una ración clara de proteína.' : itemsText(pl.items), accion: () => cambiarComidaHoy(f, d, c), aria: 'Ajustar lo de hoy',
+      extra: !pl.libre && L.hogar(data).some((x) => x.comidas.includes(c)) ? h('button', { class: 'btn plain cocinar-btn', id: 'cocinar-' + c, type: 'button', onclick: () => cocinar(d, c) }, `Para cocinar · ${1 + L.hogar(data).filter((x) => x.comidas.includes(c)).length} personas`) : null });
   }
   const ses = L.sesionDelDia(data, d);
   if (ses) { const reg = L.regGym(data, f), ejs = L.ejerciciosDelDia(data, d), hechasEj = ejs.filter((e) => reg[L.slug(e.n)] && reg[L.slug(e.n)].hecho).length;

@@ -143,6 +143,7 @@ assert.equal(L.esVersionNueva('0.1.10', 'v0.1.9'), false);
   assert.ok(Math.abs(c.poll - (200 * 1.7 + 100 * 1.7 + 7 * 50)) < 1e-9, 'en gramos: 70 % de ración en comida y cena, y el desayuno solo lo tuyo');
   assert.equal(L.paraTodos(h, 'poll', 100, 'desayuno'), 100, 'lo que no compartís no se multiplica');
   assert.equal(L.paraTodos(h, 'faj', 0.5, 'comida'), 0.5 + 0.35, 'menos de una unidad no se redondea');
+  assert.deepEqual(L.repartoHogar(h, 'faj', 2, 'comida').map((x) => [x.n, x.q]), [['Tú', 2], ['Pareja', 2]], 'reparto: por unidades 2 y 2'); assert.deepEqual(L.repartoHogar(h, 'poll', 100, 'cena').map((x) => [x.n, Math.round(x.q)]), [['Tú', 100], ['Pareja', 70]]); assert.equal(L.repartoHogar(h, 'poll', 100, 'desayuno').length, 1, 'quien no comparte no sale');
   h.perfil.hogar.push({ id: 'h2', n: 'Otra', f: 0.5, comidas: ['cena'] }); assert.equal(L.paraTodos(h, 'poll', 100, 'cena'), 100 + 70 + 50, 'varias personas'); assert.equal(L.paraTodos(h, 'poll', 100, 'comida'), 170);
   const antes = L.totalDia(h, l0, { extras: false }).k; h.perfil.hogar = []; assert.equal(L.totalDia(h, l0, { extras: false }).k, antes, 'tus calorías no cambian con quién come contigo');
   // datos viejos: "personas en casa" = 2 -> todo para dos, igual que antes

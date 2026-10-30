@@ -411,3 +411,9 @@ b.over,.metric .over{color:var(--red)}
 /* Cabecera de las ventanas: un título largo nunca debe empujar fuera el botón de guardar */
 .sheet header h3{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .sheet header .btn{flex-shrink:0}
+
+/* Hoy: botón "Para cocinar" bajo la comida; y la lista de ingredientes para cocinar */
+.slot-col{min-width:0}
+.slot .cocinar-btn{padding:6px 0 0;min-height:0;font-size:14px;margin-top:2px}
+.cocinar .item .nm{display:block}
+.cocinar .item .reparto{display:block;color:var(--muted);font-size:12px;margin-top:2px;font-variant-numeric:tabular-nums}
