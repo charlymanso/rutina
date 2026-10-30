@@ -16,6 +16,7 @@ const ok = (c, t) => { console.log(c ? 'OK  ' : 'FALLO', t); if (!c) process.exi
   await fijar([{ id: 'h1', n: 'Marta', f: 0.7, comidas: ['comida'] }]);
   ok(await p.locator('#cocinar-comida').count() === 1 && (await p.textContent('#cocinar-comida')) === 'Para cocinar · 2 personas', 'Si Marta come contigo: "Para cocinar · 2 personas" en la comida');
   ok(await p.locator('#cocinar-cena').count() === 0 && await p.locator('#cocinar-desayuno').count() === 0, 'En lo que no compartís no sale');
+  ok(/Pechuga de pollo[^·]*88 g/.test(await p.textContent('#slot-comida')), 'En Hoy salen solo tus cantidades (pollo 88 g)');
   await p.click('#cocinar-comida'); await p.waitForSelector('#cocinar-lista');
   const nIng = await p.locator('#cocinar-lista .item').count(); ok(nIng >= 3 && (await p.textContent('#cocinar-titulo')).length > 3, `Muestra el plato y sus ${nIng} ingredientes`);
   const fila = p.locator('#cocinar-lista .item:has-text("Pechuga de pollo")');

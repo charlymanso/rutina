@@ -584,26 +584,32 @@ function cocinar(d, k) {
 const PORCIONES = [[0.5, '½'], [0.75, '¾'], [1, '1×'], [1.25, '1¼'], [1.5, '1½'], [2, '2×']];
 function cambiarComidaHoy(f, d, k) {
   const nombre = NOMBRE_COMIDA[k], cambiado = !!L.cambioDe(data, f, k), actual = L.platoDelDia(data, d, k), plan = L.platoDelDia(data, d, k, { cambios: false });
-  const w = clone({ t: actual.libre ? 'Comida libre' : actual.t, items: actual.items || [], libre: !!actual.libre });
-  let origen = clone(w.items), factor = cambiado ? null : 1;
+  // El plato guarda las cantidades de todos; aquí se editan solo las tuyas y al guardar se vuelve al total
+  const mia = (id, q) => { const x = L.miCantidad(data, id, q, k); return L.ing(data, id).u === 'ud' ? x : Math.round(x); }, memoria = new Map();
+  const suyas = (items) => (items || []).map(([id, q]) => [id, mia(id, q)]);
+  const recordar = (items) => (items || []).forEach(([id, q]) => memoria.set(id, [mia(id, q), q]));
+  const totales = (items) => items.map(([id, q]) => { const m = memoria.get(id); return [id, m && Math.abs(m[0] - q) < 1e-9 ? m[1] : L.cantidadTotal(data, id, q, k)]; });
+  recordar(actual.items);
+  const w = clone({ t: actual.libre ? 'Comida libre' : actual.t, items: suyas(actual.items), libre: !!actual.libre });
+  let origen = clone(w.items), origenTot = new Map(memoria), factor = cambiado ? null : 1;
   const cuerpo = h('div', { class: 'stack', style: 'gap:14px' }), total = h('div', { class: 'macros-live num', id: 'hoy-total', 'aria-live': 'polite' }), chips = h('div', { class: 'chips', id: 'hoy-porciones', role: 'group', 'aria-label': 'Porción' });
-  const pintarTotal = () => { total.textContent = w.libre ? `Comida libre: cuenta unas ${L.miles(data.perfil.libre.kcal)} kcal` : 'Hoy, para ti: ' + macroTxt(L.sumaItems(data, w.items, k)) + (L.comensales(data, k).length ? ` · plato completo ${L.miles(L.sumaItems(data, w.items).k)} kcal` : ''); };
+  const pintarTotal = () => { total.textContent = w.libre ? `Comida libre: cuenta unas ${L.miles(data.perfil.libre.kcal)} kcal` : 'Hoy, para ti: ' + macroTxt(L.sumaItems(data, w.items)) + (L.comensales(data, k).length ? ` · plato completo ${L.miles(L.sumaItems(data, totales(w.items)).k)} kcal` : ''); };
   const pintarChips = () => chips.replaceChildren(...PORCIONES.map(([v, t]) => h('button', { type: 'button', class: 'chipopt', id: 'porcion-' + v, 'aria-pressed': String(factor === v), onclick: () => {
-    factor = v; w.items.splice(0, w.items.length, ...origen.map(([id, q]) => [id, L.ing(data, id).u === 'ud' ? Math.round(q * v * 2) / 2 : Math.round(q * v)])); edit.redraw(); pintarChips(); pintarTotal(); } }, t)));
+    factor = v; w.items.splice(0, w.items.length, ...origen.map(([id, q]) => { const ud = L.ing(data, id).u === 'ud', n = ud ? Math.round(q * v * 2) / 2 : Math.round(q * v), t = origenTot.get(id); if (t && !ud) memoria.set(id, [n, t[1] * v]); return [id, n]; })); edit.redraw(); pintarChips(); pintarTotal(); } }, t)));
   const edit = itemsEditor(w.items, () => { factor = null; pintarChips(); pintarTotal(); });
   const nombreEl = h('div', { class: 'plato-fijo', id: 'plato-nombre' }), btn = h('button', { type: 'button', class: 'btn sec', id: 'plato-elegir', onclick: () => elegirPlato({ titulo: `Hoy · ${nombre}`, m: k, actual: w.t, libre: !L.FIJAS.includes(k),
     onLibre: () => { w.libre = true; w.t = 'Comida libre'; w.items.splice(0); draw(); },
-    onPick: (x) => { w.libre = false; w.t = x.t; w.items.splice(0, w.items.length, ...clone(x.items)); origen = clone(w.items); factor = 1; edit.redraw(); draw(); } }) }, 'Cambiar plato');
+    onPick: (x) => { w.libre = false; w.t = x.t; recordar(x.items); w.items.splice(0, w.items.length, ...suyas(clone(x.items))); origen = clone(w.items); origenTot = new Map(memoria); factor = 1; edit.redraw(); draw(); } }) }, 'Cambiar plato');
   function draw() {
     nombreEl.textContent = w.t; pintarChips(); pintarTotal();
     cuerpo.replaceChildren(...[h('div', { class: 'field' }, h('span', {}, 'Plato'), h('div', { class: 'plato-sel' }, nombreEl, btn)),
-      ...(w.libre ? [total] : [h('div', { class: 'field' }, h('span', {}, 'Porción'), chips), h('div', { class: 'label' }, (L.hogar(data).length ? 'Cantidades de hoy (para todos)' : 'Tus cantidades de hoy')), edit, total]),
+      ...(w.libre ? [total] : [h('div', { class: 'field' }, h('span', {}, 'Porción'), chips), h('div', { class: 'label' }, 'Tus cantidades de hoy'), edit, total]),
       h('p', { class: 'mute small' }, 'Los cambios valen solo para hoy: el menú no se modifica.')]);
   }
   draw();
   sheet({ title: `Hoy · ${nombre}`, body: cuerpo, save: 'Guardar',
     onSave: () => {
-      const r = diaReg(f), cl = w.libre ? { t: 'Comida libre', libre: true, items: [] } : { t: w.t, items: w.items.filter((it) => it[1] > 0 && data.ingredientes[it[0]]) };
+      const r = diaReg(f), cl = w.libre ? { t: 'Comida libre', libre: true, items: [] } : { t: w.t, items: totales(w.items.filter((it) => it[1] > 0 && data.ingredientes[it[0]])) };
       const igual = plan && !!plan.libre === !!cl.libre && plan.t === cl.t && JSON.stringify((plan.items || []).map((x) => [x[0], x[1]])) === JSON.stringify(cl.items.map((x) => [x[0], x[1]]));
       r.cambios = r.cambios || {}; if (igual) delete r.cambios[k]; else r.cambios[k] = cl; if (!Object.keys(r.cambios).length) delete r.cambios; commit();
     },
@@ -738,7 +744,7 @@ function viewHoy() {
   const d = L.hoy(), f = L.iso(d), dm = L.diaMenu(data, d), hechos = L.hechosDe(data, f), slots = [];
   for (const [c, nombre] of [['desayuno', 'Desayuno'], ['media', 'Media mañana'], ['comida', 'Comida'], ['merienda', 'Merienda'], ['cena', 'Cena']]) {
     const pl = L.platoDelDia(data, d, c); if (!pl) continue; const esF = L.FIJAS.includes(c);
-    slots.push({ k: c, hora: esF ? L.fijoOn(data, c).hora : data.menu.horas[c], kind: nombre + (pl.cambiado ? ' · cambiado' : ''), title: pl.libre ? 'Comida libre' : pl.t, det: pl.libre ? 'Que lleve una ración clara de proteína.' : itemsText(pl.items), accion: () => cambiarComidaHoy(f, d, c), aria: 'Ajustar lo de hoy',
+    slots.push({ k: c, hora: esF ? L.fijoOn(data, c).hora : data.menu.horas[c], kind: nombre + (pl.cambiado ? ' · cambiado' : ''), title: pl.libre ? 'Comida libre' : pl.t, det: pl.libre ? 'Que lleve una ración clara de proteína.' : itemsText((pl.items || []).map(([id, q]) => { const x = L.miCantidad(data, id, q, c); return [id, L.ing(data, id).u === 'ud' ? x : Math.round(x)]; })), accion: () => cambiarComidaHoy(f, d, c), aria: 'Ajustar lo de hoy',
       extra: !pl.libre && L.hogar(data).some((x) => x.comidas.includes(c)) ? h('button', { class: 'btn plain cocinar-btn', id: 'cocinar-' + c, type: 'button', onclick: () => cocinar(d, c) }, `Para cocinar · ${1 + L.hogar(data).filter((x) => x.comidas.includes(c)).length} personas`) : null });
   }
   const ses = L.sesionDelDia(data, d);
