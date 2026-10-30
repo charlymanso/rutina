@@ -39,6 +39,7 @@ const ICONS = {
   datos: [['ellipse', { cx: 12, cy: 6, rx: 7, ry: 3 }], ['path', { d: 'M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6' }]],
   barcode: [['path', { d: 'M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M8 9v6M11 9v6M14 9v6M17 9v6' }]],
   hogar: [['circle', { cx: 9, cy: 8, r: 3.2 }], ['path', { d: 'M3.5 19c.5-3.2 2.7-5 5.5-5s5 1.8 5.5 5' }], ['circle', { cx: 17, cy: 9, r: 2.5 }], ['path', { d: 'M16 14.2c2.6-.3 4.5 1.3 5 4.3' }]],
+  ingredientes: [['path', { d: 'M5 9h14l-1.5 10a2 2 0 0 1-2 1.7h-7a2 2 0 0 1-2-1.7L5 9zM9 9l3-5 3 5' }]],
   platos: [['path', { d: 'M6 3v6a2 2 0 0 0 4 0V3M8 3v18M17 21V3c-2 1-3.5 3.5-3.5 7 0 1.5 1 2.5 3.5 2.5' }]],
   acerca: [['circle', { cx: 12, cy: 12, r: 9 }], ['path', { d: 'M12 11v5.5' }], ['circle', { cx: 12, cy: 7.8, r: .7 }]],
 };
@@ -305,7 +306,8 @@ function editIngrediente(id, onDone, relleno = {}) {
       const n = nombre.value.trim(); if (!n) return 'Escribe un nombre.';
       let nid = id; if (!nid) { const base = L.slug(n) || 'ingrediente'; nid = base; let c = 2; while (data.ingredientes[nid]) nid = `${base}-${c++}`; }
       const opc = (i) => (i.value.trim() === '' ? {} : null);
-      data.ingredientes[nid] = { n, u: unidad.value, k: num(kcal.value), p: num(prot.value), ...(carb.value.trim() !== '' ? { c: num(carb.value) } : {}), ...(grasa.value.trim() !== '' ? { f: num(grasa.value) } : {}),
+      const previo = id ? { ...data.ingredientes[id] } : {}; delete previo.c; delete previo.f; delete previo.pl;   // conserva código de barras, uso reciente, etc.
+      data.ingredientes[nid] = { ...previo, n, u: unidad.value, k: num(kcal.value), p: num(prot.value), ...(carb.value.trim() !== '' ? { c: num(carb.value) } : {}), ...(grasa.value.trim() !== '' ? { f: num(grasa.value) } : {}),
         s: seccion.value, ...(g.por ? { por: g.por } : {}), ...(unidad.value === 'ud' && plural.value.trim() ? { pl: plural.value.trim() } : {}) };
       commit(); onDone && onDone(nid);
     },
@@ -889,6 +891,18 @@ function viewAjustes() {
         h('div', { class: 'row', style: 'padding:0;gap:10px;flex-wrap:wrap' }, h('button', { class: 'btn', id: 'hogar-anadir', onclick: () => editarPersona(null) }, 'Añadir persona'),),
         h('p', { class: 'mute small' }, 'Las cantidades de cada plato son las de todos: lo que cocinas y compras, tal cual. Tus calorías y macros se calculan solo con tu parte. Lo que va por unidades (fajitas, huevos…) se reparte en piezas enteras.'));
     }
+    case 'ingredientes': {
+      const q = h('input', { type: 'search', id: 'ing-buscar', placeholder: 'Buscar ingrediente', autocomplete: 'off' }), lista = h('div', { class: 'group', id: 'ing-lista' });
+      const seccion = (v) => (L.SECC.find(([k]) => k === v) || [0, v || ''])[1];
+      const pintar = () => {
+        const t = normalizar(q.value.trim()), todos = Object.entries(data.ingredientes).sort((a, b) => a[1].n.localeCompare(b[1].n, 'es')), vis = t ? todos.filter(([, g]) => normalizar(g.n).includes(t)) : todos;
+        lista.replaceChildren(...(vis.length ? vis.map(([id, g]) => tapRow(g.n, `${seccion(g.s)} · ${macroPor100(g)}`, () => editIngrediente(id, () => render()))) : [h('p', { class: 'mute small', id: 'ing-vacio', style: 'padding:14px' }, 'Ningún ingrediente coincide.')]));
+      };
+      q.addEventListener('input', pintar); pintar();
+      return subpagina('Ingredientes', 'Los que ya tienes registrados: cambia el nombre, los datos nutricionales o la sección del súper',
+        h('div', { class: 'row', style: 'padding:0;gap:10px;flex-wrap:wrap' }, h('button', { class: 'btn', id: 'ing-nuevo', onclick: () => editIngrediente(null, () => render()) }, 'Nuevo ingrediente')),
+        q, lista, h('p', { class: 'mute small' }, 'Si cambias el nombre, se cambia en todos tus platos y en la lista de la compra.'));
+    }
     case 'platos': {
       const ps = data.platosPropios.slice().sort((x, y) => x.t.localeCompare(y.t, 'es')), delMenu = platosGuardados('comida').concat(platosGuardados('cena')).filter((x, k, a) => !data.platosPropios.some((p) => p.t === x.t) && a.findIndex((y) => y.t === x.t) === k);
       return subpagina('Platos', 'Arma platos con tus ingredientes y úsalos en cualquier comida',
@@ -913,6 +927,7 @@ function viewAjustes() {
       grupo(null, Nube.nubeActiva() ? filaAj('cuenta', 'cuenta', '#0a84ff', 'Cuenta', u ? u.email : 'Sin iniciar sesión') : null, filaAj('perfil', 'perfil', '#8e8e93', 'Perfil', p.nombre || 'Tu nombre y tu ciudad')),
       grupo(null, filaAj('objetivos', 'objetivos', '#ff9f0a', 'Objetivos diarios', `${L.miles(o.gym.kcal)} / ${L.miles(o.sin.kcal)} kcal · ${o.gym.prot} g de proteína`)),
       grupo(null, ...(L.hogar(data).length ? [filaAj('hogar', 'hogar', '#34c759', 'Con quién comes', `Tú y ${nombresHogar()}`)] : []), filaAj('platos', 'platos', '#ff6b35', 'Platos', data.platosPropios.length ? `${data.platosPropios.length} ${data.platosPropios.length === 1 ? 'plato guardado' : 'platos guardados'}` : 'Crea tus platos con ingredientes')),
+      grupo(null, filaAj('ingredientes', 'ingredientes', '#30b0c7', 'Ingredientes', `${n} ${n === 1 ? 'registrado' : 'registrados'}`)),
       grupo(null, filaAj('datos', 'datos', '#5e5ce6', 'Datos y copias', 'Copia de seguridad y borrado'), filaAj('acerca', 'acerca', '#8e8e93', 'Acerca de Rutina', `Versión ${S.version || 'Web'}`)));
   }
 }

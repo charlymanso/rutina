@@ -13,7 +13,7 @@ async function nuevo(b, mobile = false) {
   const b = await chromium.launch(); let p = await nuevo(b);
   await p.click('nav >> text=Ajustes');
   // ---- centro ----
-  const filas = await p.locator('.row.aj .grow').allTextContents(); ok(filas.length === 5, 'El centro de Ajustes son solo 5 secciones: ' + filas.map((f) => f.split(/\d|Tu |Copia|Versión/)[0].trim()).join(' · '));
+  const filas = await p.locator('.row.aj .grow').allTextContents(); ok(filas.length === 6, 'El centro de Ajustes son 6 secciones: ' + filas.map((f) => f.split(/\d|Tu |Copia|Versión/)[0].trim()).join(' · '));
   ok(await p.locator('.page input, .page select').count() === 0, 'Sin campos sueltos: todo está dentro de submenús');
   const todo = await p.textContent('.page'); ok(!/Desayuno|Horarios|Ciclo del menú|Media mañana|Merienda/.test(todo), 'El desayuno, la merienda y los horarios ya no están en Ajustes');
   ok((await p.textContent('#aj-objetivos')).includes('1.700 / 1.564 kcal'), 'Objetivos diarios muestra un resumen: ' + (await p.textContent('#aj-objetivos')).replace(/\s+/g, ' ').slice(-48));
@@ -25,7 +25,7 @@ async function nuevo(b, mobile = false) {
   await p.click('#aj-objetivos'); ok(await p.locator('#calcular-objetivos').count() === 1 && await p.locator('.row:has-text("Día con entreno · calorías") input').count() === 1, 'Objetivos: botón de calcular y los campos a mano');
   await p.fill('.row:has-text("Día con entreno · calorías") input', '2500'); await p.press('.row:has-text("Día con entreno · calorías") input', 'Tab'); await p.click('#aj-atras'); ok((await p.textContent('#aj-objetivos')).includes('2.500'), 'Cambiar las calorías se refleja en el resumen');
   // ---- los ingredientes ya no se ven en Ajustes ----
-  ok(await p.locator('#aj-ingredientes').count() === 0 && !(await p.textContent('body')).includes('Ingredientes'), 'Ajustes ya no muestra la lista de ingredientes');
+  ok(await p.locator('#aj-ingredientes').count() === 1 && await p.locator('#ing-lista').count() === 0, 'Ajustes: Ingredientes es una sección aparte, la lista no está en el centro');
   while (await p.locator('.sheet').count()) { await p.locator('.sheet header .btn.plain').last().click(); await p.waitForTimeout(80); }
   // ---- datos y acerca ----
   await p.click('#aj-datos'); ok((await p.textContent('.page')).includes('Guardar una copia') && (await p.textContent('.page')).includes('Borrar todos mis datos'), 'Datos y copias: copia, recuperar, plantilla y borrar'); await p.click('text=Borrar todos mis datos'); await p.waitForSelector('.sheet:has-text("¿Borrar todo?")'); ok(true, 'Borrar pide confirmación'); await p.locator('.sheet header .btn.plain').click();
