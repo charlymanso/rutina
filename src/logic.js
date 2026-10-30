@@ -128,17 +128,28 @@ export function cantidadCompra(data, id, q) {
 
 // ---- lista de la compra ----
 // sel: 0 esta semana, 1 la siguiente, 2 las dos. Devuelve { id: cantidad }
+// ---- con quién comes ----
+// Los platos llevan SOLO tus cantidades. Cada persona de perfil.hogar come una parte de tu ración (f) en las comidas que comparte.
+export const COMIDAS_HOGAR = [['desayuno', 'Desayuno'], ['media', 'Media mañana'], ['comida', 'Comida'], ['merienda', 'Merienda'], ['cena', 'Cena']];
+export const hogar = (data) => (Array.isArray(data.perfil.hogar) ? data.perfil.hogar : []);
+// Lo que hay que comprar de un ingrediente para una comida: lo tuyo más la ración de cada persona que la comparte.
+// Con cosas por unidades se redondea hacia arriba (2 fajitas al 70 % → 2 fajitas), porque nadie se come 1,4.
+export function paraTodos(data, id, q, m) {
+  const ud = ing(data, id).u === 'ud'; let t = q;
+  for (const p of hogar(data)) if ((p.comidas || []).includes(m)) { const x = q * p.f; t += ud && x >= 1 ? Math.ceil(x - 1e-9) : x; }
+  return t;
+}
 export function listaCompra(data, sel, desde = hoy()) {
   if (sel === 2) {
     const a = listaCompra(data, 0, desde), b = listaCompra(data, 1, desde);
     for (const k of Object.keys(b)) a[k] = (a[k] || 0) + b[k];
     return a;
   }
-  const lun = addDays(lunesDe(desde), sel * 7), tot = {}, n = data.perfil.personas || 1;
-  const suma = (id, q) => { tot[id] = (tot[id] || 0) + q * n; };
+  const lun = addDays(lunesDe(desde), sel * 7), tot = {};
+  const suma = (id, q, m) => { tot[id] = (tot[id] || 0) + paraTodos(data, id, q, m); };
   semanaDe(data, lun).forEach((dm, i) => {
-    for (const m of ['comida', 'cena']) { const pl = dm[m]; if (pl && !pl.libre) (pl.items || []).forEach(([id, q]) => suma(id, q)); }
-    for (const c of FIJAS) { const f = fijoDia(data, addDays(lun, i), c); if (f) f.items.forEach(([id, q]) => suma(id, q)); }
+    for (const m of ['comida', 'cena']) { const pl = dm[m]; if (pl && !pl.libre) (pl.items || []).forEach(([id, q]) => suma(id, q, m)); }
+    for (const c of FIJAS) { const f = fijoDia(data, addDays(lun, i), c); if (f) f.items.forEach(([id, q]) => suma(id, q, c)); }
   });
   return tot;
 }

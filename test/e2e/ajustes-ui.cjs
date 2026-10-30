@@ -13,7 +13,7 @@ async function nuevo(b, mobile = false) {
   const b = await chromium.launch(); let p = await nuevo(b);
   await p.click('nav >> text=Ajustes');
   // ---- centro ----
-  const filas = await p.locator('.row.aj .grow').allTextContents(); ok(filas.length === 5, 'El centro de Ajustes son solo 5 secciones: ' + filas.map((f) => f.split(/\d|Tu |Copia|Versión/)[0].trim()).join(' · '));
+  const filas = await p.locator('.row.aj .grow').allTextContents(); ok(filas.length === 6, 'El centro de Ajustes son solo 6 secciones: ' + filas.map((f) => f.split(/\d|Tu |Copia|Versión/)[0].trim()).join(' · '));
   ok(await p.locator('.page input, .page select').count() === 0, 'Sin campos sueltos: todo está dentro de submenús');
   const todo = await p.textContent('.page'); ok(!/Desayuno|Horarios|Ciclo del menú|Media mañana|Merienda/.test(todo), 'El desayuno, la merienda y los horarios ya no están en Ajustes');
   ok((await p.textContent('#aj-objetivos')).includes('1.700 / 1.564 kcal'), 'Objetivos diarios muestra un resumen: ' + (await p.textContent('#aj-objetivos')).replace(/\s+/g, ' ').slice(-48));

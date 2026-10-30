@@ -11,7 +11,7 @@ const ej = (n, s, c = false) => ({ n, s, c });
 export function emptyData() {
   return {
     version: 1,
-    perfil: { listo: false, nombre: '', personas: 1, objetivos: { gym: { kcal: 2400, prot: 140 }, sin: { kcal: 2100, prot: 130 } }, libre: { kcal: 800, prot: 35 } },
+    perfil: { listo: false, nombre: '', hogar: [], objetivos: { gym: { kcal: 2400, prot: 140 }, sin: { kcal: 2100, prot: 130 } }, libre: { kcal: 800, prot: 35 } },
     ingredientes: {},
     menu: { ancla: iso(lunesDe(hoy())), horas: { comida: '14:30', cena: '21:00' }, fijos: {
       desayuno: { on: true, hora: '08:00', texto: 'Desayuno', items: [] },
@@ -71,6 +71,11 @@ export function normalize(raw) {
   }
   for (const k of ['ingredientes', 'dias', 'compra']) if (!out[k] || typeof out[k] !== 'object') out[k] = {};
   delete out.agenda; delete out.clima; if (out.perfil) delete out.perfil.ciudad;                 // versiones anteriores: tiempo y recordatorios ya no existen
+  // Con quién comes: personas que comparten algunas de tus comidas. (Antes había un número de "personas en casa" que multiplicaba todo.)
+  const COM = ['desayuno', 'media', 'comida', 'merienda', 'cena'], antes = (d.perfil || {}).personas;
+  if (Array.isArray((d.perfil || {}).hogar)) out.perfil.hogar = out.perfil.hogar.filter((x) => x && typeof x === 'object').slice(0, 8).map((x, i) => ({ id: String(x.id || 'h' + (i + 1)), n: String(x.n || 'Persona').slice(0, 30), f: Number.isFinite(+x.f) ? Math.min(2, Math.max(0.1, +x.f)) : 1, comidas: Array.isArray(x.comidas) ? COM.filter((c) => x.comidas.includes(c)) : ['comida', 'cena'] }));
+  else out.perfil.hogar = Number.isInteger(antes) && antes > 1 ? Array.from({ length: Math.min(antes - 1, 8) }, (_, i) => ({ id: 'h' + (i + 1), n: `Persona ${i + 2}`, f: 1, comidas: [...COM] })) : [];   // mismo resultado que antes: todo para todos, ración igual
+  delete out.perfil.personas;
   for (const [f, r] of Object.entries(out.dias)) {                // registros de un día: si algo viene con otra forma (datos viejos o dañados), se corrige sin romper la app
     if (!r || typeof r !== 'object' || Array.isArray(r)) { out.dias[f] = { hechos: {} }; continue; }
     if (r.cambios && typeof r.cambios === 'object' && !Array.isArray(r.cambios)) {

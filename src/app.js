@@ -38,6 +38,7 @@ const ICONS = {
   ingredientes: [['path', { d: 'M4.5 11h15l-1.6 8a2 2 0 0 1-2 1.6H8.1a2 2 0 0 1-2-1.6L4.5 11z' }], ['path', { d: 'M8 11c0-3 1.6-5 4-5s4 2 4 5' }]],
   datos: [['ellipse', { cx: 12, cy: 6, rx: 7, ry: 3 }], ['path', { d: 'M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6' }]],
   barcode: [['path', { d: 'M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M8 9v6M11 9v6M14 9v6M17 9v6' }]],
+  hogar: [['circle', { cx: 9, cy: 8, r: 3.2 }], ['path', { d: 'M3.5 19c.5-3.2 2.7-5 5.5-5s5 1.8 5.5 5' }], ['circle', { cx: 17, cy: 9, r: 2.5 }], ['path', { d: 'M16 14.2c2.6-.3 4.5 1.3 5 4.3' }]],
   platos: [['path', { d: 'M6 3v6a2 2 0 0 0 4 0V3M8 3v18M17 21V3c-2 1-3.5 3.5-3.5 7 0 1.5 1 2.5 3.5 2.5' }]],
   acerca: [['circle', { cx: 12, cy: 12, r: 9 }], ['path', { d: 'M12 11v5.5' }], ['circle', { cx: 12, cy: 7.8, r: .7 }]],
 };
@@ -337,14 +338,46 @@ function elegirPlato({ titulo = 'Elegir plato', m = 'comida', actual = '', libre
   return sh;
 }
 
+/* Con quién comes: personas que comparten algunas de tus comidas, con su ración respecto a la tuya. */
+const nombresHogar = () => { const n = L.hogar(data).map((x) => x.n); return n.length > 1 ? `${n.slice(0, -1).join(', ')} y ${n[n.length - 1]}` : n[0] || ''; };
+function editarPersona(x) {
+  const w = x ? clone(x) : { id: 'h' + Date.now().toString(36), n: '', f: 0.7, comidas: ['comida', 'cena'] };
+  const nom = h('input', { type: 'text', id: 'hogar-nombre', value: w.n, placeholder: 'Ej. Pareja', autocomplete: 'off' }), pct = h('span', { class: 'num', id: 'hogar-pct' }), chips = h('div', { class: 'chips', id: 'hogar-comidas', role: 'group', 'aria-label': 'Comidas que compartís' }), ejemplo = h('p', { class: 'mute small', id: 'hogar-ejemplo' });
+  const mover = (d) => { w.f = Math.min(2, Math.max(0.1, Math.round((w.f + d) * 100) / 100)); pintar(); };
+  function pintar() {
+    pct.textContent = Math.round(w.f * 100) + ' %'; ejemplo.textContent = `Si tú comes 200 g, ${w.n.trim() || 'esta persona'} come ${Math.round(200 * w.f)} g. Lo que va por unidades se redondea hacia arriba.`;
+    chips.replaceChildren(...L.COMIDAS_HOGAR.map(([k, t]) => h('button', { type: 'button', class: 'chipopt', id: 'hogar-c-' + k, 'aria-pressed': String(w.comidas.includes(k)), onclick: () => { w.comidas = w.comidas.includes(k) ? w.comidas.filter((y) => y !== k) : [...w.comidas, k]; pintar(); } }, t)));
+  }
+  nom.addEventListener('input', () => { w.n = nom.value; pintar(); }); pintar();
+  sheet({ title: x ? x.n || 'Persona' : 'Añadir persona', save: x ? 'Guardar' : 'Añadir', body: [field('Nombre', nom),
+    h('div', { class: 'field' }, h('span', {}, 'Cuánto come, comparado contigo'), h('div', { class: 'stepper' }, h('button', { type: 'button', id: 'hogar-menos', 'aria-label': 'Menos', onclick: () => mover(-0.05) }, '−'), pct, h('button', { type: 'button', id: 'hogar-mas', 'aria-label': 'Más', onclick: () => mover(0.05) }, '+'))),
+    ejemplo, h('div', { class: 'field' }, h('span', {}, 'Qué comidas compartís'), chips)],
+  onSave: () => {
+    const n = nom.value.trim(); if (!n) return 'Escribe un nombre.'; if (!w.comidas.length) return 'Marca al menos una comida que compartáis.';
+    const nuevo = { id: w.id, n, f: w.f, comidas: L.COMIDAS_HOGAR.map(([k]) => k).filter((k) => w.comidas.includes(k)) }, lista = (data.perfil.hogar = L.hogar(data)), i = lista.findIndex((y) => y.id === w.id);
+    if (i >= 0) lista[i] = nuevo; else lista.push(nuevo); commit();
+  } });
+}
+/* Si los platos ya llevan las cantidades de todos, los deja con solo las tuyas (con deshacer). */
+function ajustarPlatosAlHogar() {
+  const hg = L.hogar(data); if (!hg.length) return;
+  const factor = (m) => 1 + hg.filter((p) => p.comidas.includes(m)).reduce((a, p) => a + p.f, 0);
+  confirmSheet('¿Dejar tus platos con solo tus cantidades?', 'Si en tus platos de comida y cena pusiste las cantidades de todos, esto las reparte y deja la tuya. Se aplica a los platos del menú y a los de Ajustes > Platos. Hazlo una sola vez: si lo repites, vuelve a dividir.', 'Ajustar', () => {
+    const antes = { menu: clone(data.menu), platos: clone(data.platosPropios) };
+    const adj = (pl, m) => { if (!pl || pl.libre) return; pl.items = (pl.items || []).map(([id, q]) => { const x = q / factor(m), ud = L.ing(data, id).u === 'ud'; return [id, ud ? (x >= 1.5 ? Math.round(x) : Math.max(0.5, Math.round(x * 2) / 2)) : Math.round(x)]; }); };
+    data.menu.semanas.forEach((w) => w.forEach((d) => { adj(d.comida, 'comida'); adj(d.cena, 'cena'); }));
+    data.platosPropios.forEach((pl) => adj(pl, 'comida'));
+    commit(); toast('Platos ajustados a tus cantidades.', () => { data.menu = antes.menu; data.platosPropios = antes.platos; commit(); });
+  });
+}
 /* Platos propios: se arman con ingredientes y quedan guardados para usarlos en cualquier comida. */
 function borrarPlato(x) {
   confirmSheet('¿Borrar este plato?', `“${x.t}” dejará de salir en la lista. Los días del menú que ya lo usan no cambian.`, 'Borrar', () => { data.platosPropios = data.platosPropios.filter((y) => y.t !== x.t); commit(); sheets.slice().forEach((z) => z.close()); toast('Plato borrado.'); });
 }
 function crearPlato(onListo, existente = null) {
   const w = existente ? clone(existente) : { t: '', items: [] }, nombre = h('input', { type: 'text', id: 'nuevo-plato-nombre', value: w0(existente), placeholder: 'Ej. Bowl de pollo y arroz' }), total = h('div', { class: 'macros-live num', id: 'nuevo-plato-total', 'aria-live': 'polite' });
-  const pintar = () => { total.textContent = 'Por persona: ' + macroTxt(L.sumaItems(data, w.items)); }, edit = itemsEditor(w.items, pintar); pintar();
-  sheet({ title: existente ? 'Editar plato' : 'Nuevo plato', save: existente ? 'Guardar' : 'Guardar plato', body: [field('Nombre del plato', nombre), h('div', { class: 'label' }, 'Ingredientes por persona'), edit, total, h('p', { class: 'mute small' }, 'Quedará guardado para elegirlo en cualquier comida.')],
+  const pintar = () => { total.textContent = 'Para ti: ' + macroTxt(L.sumaItems(data, w.items)); }, edit = itemsEditor(w.items, pintar); pintar();
+  sheet({ title: existente ? 'Editar plato' : 'Nuevo plato', save: existente ? 'Guardar' : 'Guardar plato', body: [field('Nombre del plato', nombre), h('div', { class: 'label' }, 'Tus cantidades'), edit, total, h('p', { class: 'mute small' }, 'Quedará guardado para elegirlo en cualquier comida.')],
     onSave: () => {
       const t = nombre.value.trim(); if (!t) return 'Escribe el nombre del plato.';
       const items = w.items.filter((it) => it[1] > 0 && data.ingredientes[it[0]]); if (!items.length) return 'Añade al menos un ingrediente con su cantidad.';
@@ -364,7 +397,7 @@ function editPlato(semana, i, m) {
   if (w.libre) w.t = '';
   const cuerpo = h('div', { class: 'stack', style: 'gap:14px' });
   const total = h('div', { class: 'macros-live num', id: 'plato-total', 'aria-live': 'polite' });
-  const pintarTotal = () => { total.textContent = 'Por persona: ' + macroTxt(L.sumaItems(data, w.items)); };
+  const pintarTotal = () => { total.textContent = 'Para ti: ' + macroTxt(L.sumaItems(data, w.items)); };
   const edit = itemsEditor(w.items, pintarTotal);
   const nombreEl = h('div', { class: 'plato-fijo', id: 'plato-nombre' }), btnElegir = h('button', { type: 'button', class: 'btn sec', id: 'plato-elegir', onclick: () => elegirPlato({ m, actual: w.t, onPick: (pl) => { w.t = pl.t; w.items.splice(0, w.items.length, ...clone(pl.items)); edit.redraw(); pintarTotal(); draw(); } }) });
   const pintarNombre = () => { nombreEl.textContent = w.t || 'Ningún plato elegido'; nombreEl.classList.toggle('vacio', !w.t); btnElegir.textContent = w.t ? 'Cambiar plato' : 'Elegir plato'; };
@@ -381,7 +414,7 @@ function editPlato(semana, i, m) {
   function draw() {
     pintarNombre(); cuerpo.replaceChildren(...[
       !esFija ? h('div', { class: 'row', style: 'padding:0;min-height:0' }, h('div', { class: 'grow' }, 'Comida libre', h('div', { class: 'sub' }, 'Sin ingredientes: cuenta con tus calorías de comida libre.')), swt(w.libre, () => { w.libre = !w.libre; draw(); }, 'Comida libre')) : null,
-      ...(w.libre ? [] : [h('div', { class: 'field' }, h('span', {}, 'Plato'), h('div', { class: 'plato-sel' }, nombreEl, btnElegir)), ...(w.t ? [h('div', { class: 'label' }, 'Ingredientes por persona'), edit, total] : [])]), repetir].filter(Boolean));
+      ...(w.libre ? [] : [h('div', { class: 'field' }, h('span', {}, 'Plato'), h('div', { class: 'plato-sel' }, nombreEl, btnElegir)), ...(w.t ? [h('div', { class: 'label' }, 'Tus cantidades'), edit, total] : [])]), repetir].filter(Boolean));
   }
   pintarRep(); draw(); pintarTotal();
   sheet({ title: `${L.DIAS[i]} · ${NOMBRE_COMIDA[m]}`, body: cuerpo,
@@ -551,7 +584,7 @@ function cambiarComidaHoy(f, d, k) {
   const w = clone({ t: actual.libre ? 'Comida libre' : actual.t, items: actual.items || [], libre: !!actual.libre });
   let origen = clone(w.items), factor = cambiado ? null : 1;
   const cuerpo = h('div', { class: 'stack', style: 'gap:14px' }), total = h('div', { class: 'macros-live num', id: 'hoy-total', 'aria-live': 'polite' }), chips = h('div', { class: 'chips', id: 'hoy-porciones', role: 'group', 'aria-label': 'Porción' });
-  const pintarTotal = () => { total.textContent = w.libre ? `Comida libre: cuenta unas ${L.miles(data.perfil.libre.kcal)} kcal` : 'Hoy, por persona: ' + macroTxt(L.sumaItems(data, w.items)); };
+  const pintarTotal = () => { total.textContent = w.libre ? `Comida libre: cuenta unas ${L.miles(data.perfil.libre.kcal)} kcal` : 'Hoy, para ti: ' + macroTxt(L.sumaItems(data, w.items)); };
   const pintarChips = () => chips.replaceChildren(...PORCIONES.map(([v, t]) => h('button', { type: 'button', class: 'chipopt', id: 'porcion-' + v, 'aria-pressed': String(factor === v), onclick: () => {
     factor = v; w.items.splice(0, w.items.length, ...origen.map(([id, q]) => [id, L.ing(data, id).u === 'ud' ? Math.round(q * v * 2) / 2 : Math.round(q * v)])); edit.redraw(); pintarChips(); pintarTotal(); } }, t)));
   const edit = itemsEditor(w.items, () => { factor = null; pintarChips(); pintarTotal(); });
@@ -561,7 +594,7 @@ function cambiarComidaHoy(f, d, k) {
   function draw() {
     nombreEl.textContent = w.t; pintarChips(); pintarTotal();
     cuerpo.replaceChildren(...[h('div', { class: 'field' }, h('span', {}, 'Plato'), h('div', { class: 'plato-sel' }, nombreEl, btn)),
-      ...(w.libre ? [total] : [h('div', { class: 'field' }, h('span', {}, 'Porción'), chips), h('div', { class: 'label' }, 'Ingredientes de hoy, por persona'), edit, total]),
+      ...(w.libre ? [total] : [h('div', { class: 'field' }, h('span', {}, 'Porción'), chips), h('div', { class: 'label' }, 'Tus cantidades de hoy'), edit, total]),
       h('p', { class: 'mute small' }, 'Los cambios valen solo para hoy: el menú no se modifica.')]);
   }
   draw();
@@ -759,7 +792,7 @@ function viewSemana() {
       h('div', { class: 'metric' }, h('span', { class: 'label' }, 'Media diaria'), h('b', { class: 'num', id: 'media-kcal' }, `${L.miles(media.k)} kcal`)),
       h('div', { class: 'metric' }, h('span', { class: 'label' }, 'Proteína media'), h('b', { class: 'num', id: 'media-prot' }, `${L.miles(media.p)} g`)),
       h('div', { class: 'metric' }, h('span', { class: 'label' }, 'Objetivo medio'), h('b', { class: 'num' }, `${L.miles(dias.reduce((a, x) => a + x.o.kcal, 0) / 7)} kcal`))) : null,
-    h('p', { class: 'mute small' }, 'Toca un plato para editarlo y, si quieres, repetirlo en otros días. Las cantidades son por persona.'),
+    h('p', { class: 'mute small' }, 'Toca un plato para editarlo y, si quieres, repetirlo en otros días. Las cantidades son las tuyas.'),
     h('div', { class: 'group' }, dias.map(({ d, i, t, o }) => {
       const pct = t && o.kcal ? Math.min(100, t.k / o.kcal * 100) : 0, pasa = t && o.kcal && t.k > o.kcal * 1.05;
       return h('div', { class: 'dayrow' + (L.iso(d) === fh ? ' hoy' : '') }, h('div', { class: 'dn' }, L.DIAS[i], h('small', {}, L.fechaCorta(d) + (L.esDiaGym(data, d) ? ' · con entreno' : '')),
@@ -795,9 +828,7 @@ function viewCompra() {
   return h('div', { class: 'page' },
     h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, 'Compra'), h('p', { class: 'subtitle num' }, `${hechos} de ${total} en el carro`)),
       seg([[2, 'Dos semanas'], [0, 'Esta semana'], [1, 'La que viene']], S.compSel, (v) => { S.compSel = v; render(); })),
-    h('div', { class: 'head' }, h('div', { class: 'row', style: 'padding:0;min-height:0;gap:10px' }, h('span', { class: 'mute' }, 'Para'), h('div', { class: 'stepper' },
-      h('button', { 'aria-label': 'Menos personas', onclick: () => { data.perfil.personas = Math.max(1, (data.perfil.personas || 1) - 1); commit(); } }, '−'), h('span', { class: 'num' }, String(data.perfil.personas || 1)),
-      h('button', { 'aria-label': 'Más personas', onclick: () => { data.perfil.personas = Math.min(12, (data.perfil.personas || 1) + 1); commit(); } }, '+')), h('span', { class: 'mute' }, (data.perfil.personas || 1) === 1 ? 'persona' : 'personas')),
+    h('div', { class: 'head' }, h('button', { class: 'btn plain', id: 'compra-hogar', style: 'padding-left:0;text-align:left', onclick: () => { go('ajustes'); irAj('hogar'); } }, L.hogar(data).length ? `Para ti y ${nombresHogar()}` : 'Solo para ti · añadir a alguien'),
       h('div', {}, h('button', { class: 'btn sec', onclick: copiar, disabled: !total }, 'Copiar lista'), ' ', h('button', { class: 'btn plain', onclick: () => { data.compra[k] = { marcados: {} }; data.extrasCompra.forEach((x) => { x.ok = false; }); commit(); }, disabled: !hechos }, 'Desmarcar todo'))),
     h('button', { class: 'btn sec', id: 'add-compra', style: 'align-self:flex-start', onclick: anadirCompra }, '+ Añadir a la lista'),
     total ? h('div', { class: 'shop' }, secciones) : h('div', { class: 'card empty' }, h('p', {}, 'Tu lista aparecerá aquí cuando añadas platos al menú o cosas por tu cuenta.'), h('button', { class: 'btn', onclick: () => go('semana') }, 'Ir al menú')));
@@ -830,13 +861,21 @@ function viewAjustes() {
   switch (S.aj) {
     case 'cuenta': return subpagina('Cuenta', 'Sincroniza tu plan entre tus dispositivos', cuentaGrupo());
     case 'perfil': return subpagina('Perfil', null,
-      grupo(null, rowOf('Nombre', txtAj(p.nombre, (v) => { p.nombre = v; commit(); }, 'Tu nombre')),
-        rowOf('Personas en casa', h('div', { class: 'stepper' }, h('button', { 'aria-label': 'Menos', onclick: () => { p.personas = Math.max(1, (p.personas || 1) - 1); commit(); } }, '−'), h('span', { class: 'num' }, String(p.personas || 1)), h('button', { 'aria-label': 'Más', onclick: () => { p.personas = Math.min(12, (p.personas || 1) + 1); commit(); } }, '+')), 'Multiplica las cantidades de la lista de la compra.')));
+      grupo(null, rowOf('Nombre', txtAj(p.nombre, (v) => { p.nombre = v; commit(); }, 'Tu nombre'))));
     case 'objetivos': return subpagina('Objetivos diarios', 'Tus calorías y tu proteína',
       h('div', { class: 'card', style: 'gap:10px' }, h('div', {}, h('b', {}, 'Calcúlalos por ti'), h('p', { class: 'mute small' }, 'A partir de tu edad, peso, altura y actividad, con las mismas fórmulas que Macrómetro.')), h('button', { class: 'btn', id: 'calcular-objetivos', style: 'align-self:flex-start', onclick: () => abrirObjetivo() }, 'Calcular mis objetivos')),
       grupo('A mano', rowOf('Día con entreno · calorías', numField(o.gym.kcal, (v) => { o.gym.kcal = v; commit(); })), rowOf('Día con entreno · proteína (g)', numField(o.gym.prot, (v) => { o.gym.prot = v; commit(); })),
         rowOf('Día sin entreno · calorías', numField(o.sin.kcal, (v) => { o.sin.kcal = v; commit(); })), rowOf('Día sin entreno · proteína (g)', numField(o.sin.prot, (v) => { o.sin.prot = v; commit(); }))),
       grupo('Comida libre', rowOf('Calorías', numField(p.libre.kcal, (v) => { p.libre.kcal = v; commit(); }), 'Lo que cuentas cuando comes fuera del plan.'), rowOf('Proteína (g)', numField(p.libre.prot, (v) => { p.libre.prot = v; commit(); }))));
+    case 'hogar': {
+      const hg = L.hogar(data), nombresComidas = (cs) => (cs.length === 5 ? 'todas las comidas' : cs.length ? L.COMIDAS_HOGAR.filter(([k]) => cs.includes(k)).map(([, t]) => t.toLowerCase()).join(', ') : 'ninguna comida');
+      return subpagina('Con quién comes', 'Tus platos llevan solo tus cantidades. Aquí dices quién más come contigo y cuánto.',
+        hg.length ? h('div', { class: 'group', id: 'hogar-lista' }, hg.map((x, i) => deslizable(tapRow(x.n, `${Math.round(x.f * 100)} % de tu ración · ${nombresComidas(x.comidas)}`, () => editarPersona(x)), () => sacar(data.perfil.hogar, i, x.n, commit))))
+          : h('p', { class: 'mute small', id: 'hogar-vacio', style: 'padding-left:4px' }, 'Ahora comes solo. Si compartes alguna comida con alguien, añádelo y la lista de la compra se ajusta sola.'),
+        h('div', { class: 'row', style: 'padding:0;gap:10px;flex-wrap:wrap' }, h('button', { class: 'btn', id: 'hogar-anadir', onclick: () => editarPersona(null) }, 'Añadir persona'),
+          hg.length ? h('button', { class: 'btn sec', id: 'hogar-ajustar', onclick: ajustarPlatosAlHogar }, 'Ajustar mis platos') : null),
+        h('p', { class: 'mute small' }, 'La lista de la compra suma la ración de cada persona en las comidas que compartís. Tus calorías salen siempre solo de tus cantidades. Lo que va por unidades (fajitas, huevos…) se redondea hacia arriba.'));
+    }
     case 'platos': {
       const ps = data.platosPropios.slice().sort((x, y) => x.t.localeCompare(y.t, 'es')), delMenu = platosGuardados('comida').concat(platosGuardados('cena')).filter((x, k, a) => !data.platosPropios.some((p) => p.t === x.t) && a.findIndex((y) => y.t === x.t) === k);
       return subpagina('Platos', 'Arma platos con tus ingredientes y úsalos en cualquier comida',
@@ -860,7 +899,7 @@ function viewAjustes() {
       h('div', {}, h('h1', { class: 'title' }, 'Ajustes')),
       grupo(null, Nube.nubeActiva() ? filaAj('cuenta', 'cuenta', '#0a84ff', 'Cuenta', u ? u.email : 'Sin iniciar sesión') : null, filaAj('perfil', 'perfil', '#8e8e93', 'Perfil', p.nombre || 'Tu nombre y tu ciudad')),
       grupo(null, filaAj('objetivos', 'objetivos', '#ff9f0a', 'Objetivos diarios', `${L.miles(o.gym.kcal)} / ${L.miles(o.sin.kcal)} kcal · ${o.gym.prot} g de proteína`)),
-      grupo(null, filaAj('platos', 'platos', '#ff6b35', 'Platos', data.platosPropios.length ? `${data.platosPropios.length} ${data.platosPropios.length === 1 ? 'plato guardado' : 'platos guardados'}` : 'Crea tus platos con ingredientes')),
+      grupo(null, filaAj('hogar', 'hogar', '#34c759', 'Con quién comes', L.hogar(data).length ? `Tú y ${nombresHogar()}` : 'Solo tú'), filaAj('platos', 'platos', '#ff6b35', 'Platos', data.platosPropios.length ? `${data.platosPropios.length} ${data.platosPropios.length === 1 ? 'plato guardado' : 'platos guardados'}` : 'Crea tus platos con ingredientes')),
       grupo(null, filaAj('datos', 'datos', '#5e5ce6', 'Datos y copias', 'Copia de seguridad y borrado'), filaAj('acerca', 'acerca', '#8e8e93', 'Acerca de Rutina', `Versión ${S.version || 'Web'}`)));
   }
 }

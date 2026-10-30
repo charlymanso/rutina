@@ -83,19 +83,19 @@ d.menu.semanas[0][2].desayuno = { t: 'Tostadas con aguacate', items: [['pan', 80
 const mie = L.addDays(lun, 2), fMie = L.fijoDia(d, mie, 'desayuno'); assert.equal(fMie.propio, true); assert.equal(fMie.texto, 'Tostadas con aguacate'); assert.equal(fMie.hora, d.menu.fijos.desayuno.hora, 'la hora sigue siendo la general');
 assert.notEqual(Math.round(L.totalDia(d, mie).k), Math.round(L.totalDia(d, L.addDays(lun, 1)).k), 'el desayuno propio cambia las calorías de ese día');
 d.menu.fijos.merienda.on = false; assert.equal(L.fijoDia(d, mie, 'merienda'), null, 'una comida desactivada no aparece');
-d.perfil.personas = 1; const cPropio = L.listaCompra(d, 0, lun); assert.equal(cPropio.avena, 300, 'avena: 6 días × 50 g (el miércoles lleva tostadas)'); assert.equal(cPropio.pan, 80 + 40 * 3, 'el pan del desayuno propio (80 g) se suma al de las 3 cenas con pan');
+d.perfil.hogar = []; const cPropio = L.listaCompra(d, 0, lun); assert.equal(cPropio.avena, 300, 'avena: 6 días × 50 g (el miércoles lleva tostadas)'); assert.equal(cPropio.pan, 80 + 40 * 3, 'el pan del desayuno propio (80 g) se suma al de las 3 cenas con pan');
 delete d.menu.semanas[0][2].desayuno; d.menu.fijos.merienda.on = false; d.menu.fijos.media.on = true;
 
 // lista de la compra
-d.perfil.personas = 1;
+d.perfil.hogar = [];
 const c1 = L.listaCompra(d, 0, lun);
 // huevos: 3 (lun) + 2 (jue) + 3 (dom) + 0 = 8 ; aceite incluido
 assert.equal(c1.huevo, 8);
-d.perfil.personas = 2;
+d.perfil.hogar = [{ id: 'h1', n: 'Pareja', f: 1, comidas: ['desayuno', 'media', 'comida', 'merienda', 'cena'] }];   // alguien que come igual que tú en todo
 assert.equal(L.listaCompra(d, 0, lun).huevo, 16);
 assert.equal(L.listaCompra(d, 2, lun).huevo, 16 * 2); // dos semanas del mismo ciclo
 // comida libre no aporta ingredientes; fijos cuentan los 7 días (7 × 50 g de avena)
-d.perfil.personas = 1;
+d.perfil.hogar = [];
 assert.equal(L.listaCompra(d, 0, lun).avena, 350);
 d.menu.fijos.media.on = false;
 assert.equal(L.listaCompra(d, 0, lun).manzana, undefined);
@@ -129,6 +129,27 @@ assert.equal(L.esVersionNueva('0.2.0', 'v0.1.9'), false);
 assert.equal(L.esVersionNueva('0.9.9', 'v1.0.0'), true);
 assert.equal(L.esVersionNueva('0.1.10', 'v0.1.9'), false);
 
+// ---- con quién comes ----
+{
+  const h = makeTemplate(); h.menu.ancla = '2026-10-26'; const l0 = L.parseISO('2026-10-26');
+  h.ingredientes.faj = { n: 'Fajita', u: 'ud', k: 150, p: 5, s: 'pan' }; h.ingredientes.poll = { n: 'Pollo', u: 'g', k: 120, p: 23, s: 'carne' };
+  h.menu.semanas[0].forEach((dm) => { dm.comida = null; dm.cena = null; }); h.menu.fijos.desayuno.on = true; h.menu.fijos.desayuno.items = [['poll', 50]]; ['media', 'merienda'].forEach((k) => { h.menu.fijos[k].on = false; });
+  h.menu.semanas[0][0].comida = { t: 'Fajitas', items: [['faj', 2], ['poll', 200]] }; h.menu.semanas[0][1].cena = { t: 'Pollo', items: [['poll', 100]] };
+  h.perfil.hogar = [];
+  let c = L.listaCompra(h, 0, l0); assert.equal(c.faj, 2); assert.equal(c.poll, 200 + 100 + 7 * 50, 'solo tú: todo tal cual');
+  h.perfil.hogar = [{ id: 'h1', n: 'Pareja', f: 0.7, comidas: ['comida', 'cena'] }];
+  c = L.listaCompra(h, 0, l0);
+  assert.equal(c.faj, 4, 'fajitas por unidades: 2 para ti y 2 para tu pareja (1,4 se redondea hacia arriba)');
+  assert.ok(Math.abs(c.poll - (200 * 1.7 + 100 * 1.7 + 7 * 50)) < 1e-9, 'en gramos: 70 % de ración en comida y cena, y el desayuno solo lo tuyo');
+  assert.equal(L.paraTodos(h, 'poll', 100, 'desayuno'), 100, 'lo que no compartís no se multiplica');
+  assert.equal(L.paraTodos(h, 'faj', 0.5, 'comida'), 0.5 + 0.35, 'menos de una unidad no se redondea');
+  h.perfil.hogar.push({ id: 'h2', n: 'Otra', f: 0.5, comidas: ['cena'] }); assert.equal(L.paraTodos(h, 'poll', 100, 'cena'), 100 + 70 + 50, 'varias personas'); assert.equal(L.paraTodos(h, 'poll', 100, 'comida'), 170);
+  const antes = L.totalDia(h, l0, { extras: false }).k; h.perfil.hogar = []; assert.equal(L.totalDia(h, l0, { extras: false }).k, antes, 'tus calorías no cambian con quién come contigo');
+  // datos viejos: "personas en casa" = 2 -> todo para dos, igual que antes
+  const viejo = normalize({ perfil: { listo: true, personas: 2 }, menu: null }); assert.equal(viejo.perfil.hogar.length, 1); assert.equal(viejo.perfil.hogar[0].f, 1); assert.equal(viejo.perfil.hogar[0].comidas.length, 5); assert.ok(!('personas' in viejo.perfil));
+  assert.deepEqual(normalize({ perfil: { personas: 1 } }).perfil.hogar, []);
+  assert.deepEqual(normalize({ perfil: { hogar: [{ n: 'Ana', f: 9, comidas: ['comida', 'x'] }, null, 5] } }).perfil.hogar, [{ id: 'h1', n: 'Ana', f: 2, comidas: ['comida'] }], 'normalize limpia');
+}
 // ---- cambios de un día, nutrición consumida, ejercicios de hoy y extras de la compra ----
 {
   const t = makeTemplate(); t.menu.ancla = '2026-10-26'; const mar = L.parseISO('2026-10-27'), fm = L.iso(mar), plan = L.platoDelDia(t, mar, 'comida');
