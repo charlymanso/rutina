@@ -358,17 +358,27 @@ function editarPersona(x) {
     if (i >= 0) lista[i] = nuevo; else lista.push(nuevo); commit();
   } });
 }
-/* Si los platos ya llevan las cantidades de todos, los deja con solo las tuyas (con deshacer). */
+/* Si algunos platos ya llevan las cantidades de todos, deja elegir cuáles repartir para dejar solo las tuyas. Cada plato se ajusta una sola vez. */
 function ajustarPlatosAlHogar() {
   const hg = L.hogar(data); if (!hg.length) return;
   const factor = (m) => 1 + hg.filter((p) => p.comidas.includes(m)).reduce((a, p) => a + p.f, 0);
-  confirmSheet('¿Ajustar tus platos?', 'Si en tus platos de comida y cena pusiste las cantidades de todos, esto las reparte y deja la tuya. Se aplica a los platos del menú y a los de Ajustes > Platos. Hazlo una sola vez: si lo repites, vuelve a dividir.', 'Ajustar', () => {
-    const antes = { menu: clone(data.menu), platos: clone(data.platosPropios) };
-    const adj = (pl, m) => { if (!pl || pl.libre) return; pl.items = (pl.items || []).map(([id, q]) => { const x = q / factor(m), ud = L.ing(data, id).u === 'ud'; return [id, ud ? (x >= 1.5 ? Math.round(x) : Math.max(0.5, Math.round(x * 2) / 2)) : Math.round(x)]; }); };
-    data.menu.semanas.forEach((w) => w.forEach((d) => { adj(d.comida, 'comida'); adj(d.cena, 'cena'); }));
-    data.platosPropios.forEach((pl) => adj(pl, 'comida'));
-    commit(); toast('Platos ajustados a tus cantidades.', () => { data.menu = antes.menu; data.platosPropios = antes.platos; commit(); });
-  });
+  const cand = new Map();   // nombre -> { t, items, dias }
+  const ver = (pl) => { if (!pl || pl.libre || pl.ajustado || !(pl.items || []).length) return false; const c = cand.get(pl.t) || { t: pl.t, items: pl.items, usos: 0 }; c.usos++; cand.set(pl.t, c); return true; };
+  data.menu.semanas.forEach((w) => w.forEach((d) => { ver(d.comida); ver(d.cena); })); data.platosPropios.forEach((pl) => ver(pl));
+  if (!cand.size) { sheet({ title: 'Ajustar platos', cancel: 'Cerrar', body: [h('p', { id: 'ajuste-nada' }, 'Todos tus platos ya están ajustados: llevan solo tus cantidades.'), h('p', { class: 'mute small' }, 'Los platos nuevos que crees o edites ya cuentan como tuyos.')] }); return; }
+  const lista = [...cand.values()].sort((x, y) => x.t.localeCompare(y.t, 'es')), marcados = new Set(), caja = h('div', { class: 'group cocinar ajuste', id: 'ajuste-lista' });
+  const pintar = () => caja.replaceChildren(...lista.map((c) => { const on = marcados.has(c.t); return h('button', { type: 'button', class: 'item', 'aria-pressed': String(on), onclick: () => { on ? marcados.delete(c.t) : marcados.add(c.t); pintar(); } },
+    h('span', { class: 'box', 'aria-hidden': 'true', 'aria-pressed': String(on) }, icon('check')), h('span', { class: 'nm' }, h('span', { class: 'nm-t' }, c.t), h('small', { class: 'reparto' }, itemsText(c.items))), h('span', { class: 'q' }, '')); }));
+  pintar();
+  sheet({ title: 'Ajustar platos', save: 'Aplicar', body: [h('p', { class: 'mute small' }, 'Marca los platos cuyas cantidades son de todos: se repartirán y quedará solo la tuya. Los que no marques se quedan como están y se dan por ya tuyos. Después ya no vuelven a salir aquí.'), h('div', { class: 'row', style: 'padding:0;min-height:0' }, h('button', { class: 'btn plain', id: 'ajuste-todos', style: 'padding-left:0', onclick: () => { lista.forEach((c) => marcados.add(c.t)); pintar(); } }, 'Marcar todos'), h('button', { class: 'btn plain', id: 'ajuste-ninguno', onclick: () => { marcados.clear(); pintar(); } }, 'Ninguno')), caja],
+    onSave: () => {
+      const antes = { menu: clone(data.menu), platos: clone(data.platosPropios) };
+      const adj = (pl, m) => { if (!pl || pl.libre || pl.ajustado || !cand.has(pl.t)) return;
+        if (marcados.has(pl.t)) pl.items = (pl.items || []).map(([id, q]) => { const x = q / factor(m), ud = L.ing(data, id).u === 'ud'; return [id, ud ? (x >= 1.5 ? Math.round(x) : Math.max(0.5, Math.round(x * 2) / 2)) : Math.round(x)]; });
+        pl.ajustado = true; };
+      data.menu.semanas.forEach((w) => w.forEach((d) => { adj(d.comida, 'comida'); adj(d.cena, 'cena'); })); data.platosPropios.forEach((pl) => adj(pl, 'comida'));
+      commit(); toast(marcados.size ? `${marcados.size} ${marcados.size === 1 ? 'plato ajustado' : 'platos ajustados'}.` : 'Platos marcados como ya tuyos.', () => { data.menu = antes.menu; data.platosPropios = antes.platos; commit(); });
+    } });
 }
 /* Platos propios: se arman con ingredientes y quedan guardados para usarlos en cualquier comida. */
 function borrarPlato(x) {
@@ -383,7 +393,7 @@ function crearPlato(onListo, existente = null) {
       const items = w.items.filter((it) => it[1] > 0 && data.ingredientes[it[0]]); if (!items.length) return 'Añade al menos un ingrediente con su cantidad.';
       const antes = existente ? data.platosPropios.findIndex((x) => x.t === existente.t) : -1, otro = data.platosPropios.findIndex((x, k) => x.t === t && k !== antes);
       if (otro >= 0) return 'Ya tienes un plato con ese nombre.';
-      const pl = { t, items: clone(items) }; if (antes >= 0) data.platosPropios[antes] = pl; else data.platosPropios.push(pl);
+      const pl = { t, items: clone(items), ajustado: true }; if (antes >= 0) data.platosPropios[antes] = pl; else data.platosPropios.push(pl);
       commit(); onListo && onListo(pl);
     },
     extra: existente ? h('button', { class: 'btn danger', id: 'plato-borrar', onclick: () => borrarPlato(existente) }, 'Borrar plato') : null });
@@ -421,7 +431,7 @@ function editPlato(semana, i, m) {
     onSave: () => {
       let plato;
       if (w.libre && !esFija) plato = { t: 'Comida libre', libre: true, items: [] };
-      else { const t = w.t.trim(); if (!t) return 'Elige un plato.'; plato = { t, items: w.items.filter((it) => it[1] > 0 && data.ingredientes[it[0]]) }; }
+      else { const t = w.t.trim(); if (!t) return 'Elige un plato.'; plato = { t, items: w.items.filter((it) => it[1] > 0 && data.ingredientes[it[0]]), ...(L.hogar(data).length ? { ajustado: true } : {}) }; }
       rep.forEach((j) => { semana[j][m] = clone(plato); }); commit();
       if (rep.size > 1) toast(`Guardado en ${rep.size} días.`);
     },

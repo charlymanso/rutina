@@ -37,20 +37,33 @@ const gramos = (t) => { const m = String(t).replace(/\./g, '').match(/([\d,]+)\s
   const box = await p.locator('#hogar-lista .swipe').first().boundingBox(), c = await p.context().newCDPSession(p), x = box.x + box.width - 20, y = box.y + box.height / 2;
   await c.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }); for (let i = 1; i <= 8; i++) await c.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x - 300 * i / 8, y }] }); await c.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await p.waitForTimeout(500);
   ok(await p.locator('#hogar-vacio').count() === 1, 'Deslizando se quita la persona'); await p.click('.toast-undo'); await p.waitForTimeout(250); ok((await p.textContent('#hogar-lista')).includes('Marta'), 'Y se puede deshacer');
-  // ajustar los platos que ya llevaban las cantidades de los dos
-  await p.click('nav >> text=Menú'); const pl0 = await p.textContent('#plato-comida-0'); const g0 = gramos(pl0.match(/Pechuga de pollo ([\d,.]+) g/)[1] + ' g');
-  await p.click('nav >> text=Ajustes'); await p.click('#aj-hogar'); await p.click('#hogar-ajustar'); await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(300);
-  await p.click('nav >> text=Menú'); const g1 = gramos((await p.textContent('#plato-comida-0')).match(/Pechuga de pollo ([\d,.]+) g/)[1] + ' g');
-  const esperado = g0 / (1 + 0.7); ok(Math.abs(g1 - esperado) < 1.1, `Ajustar mis platos: ${g0} g pasa a ${g1} g (tuya = total ÷ 1,7)`);
-  await p.click('.toast-undo'); await p.waitForTimeout(250); ok(gramos((await p.textContent('#plato-comida-0')).match(/Pechuga de pollo ([\d,.]+) g/)[1] + ' g') === g0, 'Y se puede deshacer');
-  // la ventana de confirmación (título largo) deja siempre el botón al alcance, también en pantallas estrechas
-  await p.setViewportSize({ width: 340, height: 700 }); await p.click('nav >> text=Ajustes'); await p.click('#aj-hogar'); await p.click('#hogar-ajustar'); await p.waitForTimeout(400);
+  // ajustar los platos que ya llevaban las cantidades de los dos: se elige cuáles y cada plato se ajusta una sola vez
+  const polloMenu = async () => gramos((await p.textContent('#plato-comida-0')).match(/Pechuga de pollo ([\d,.]+) g/)[1] + ' g');
+  await p.click('nav >> text=Menú'); const g0 = await polloMenu();
+  const abrirAjuste = async () => { await p.click('nav >> text=Ajustes'); await p.click('#aj-hogar'); await p.click('#hogar-ajustar'); await p.waitForSelector('#ajuste-lista, #ajuste-nada'); };
+  const aplicar = async () => { await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(300); };
+  // un plato que creas tú ya cuenta como tuyo y no sale en la lista
+  await p.click('nav >> text=Ajustes'); await p.click('#aj-platos'); await p.click('#plato-nuevo'); await p.fill('#nuevo-plato-nombre', 'Plato nuevo'); await p.locator('.sheet').last().locator('#anadir-alimento').click(); await p.fill('#buscar-alimento', 'arroz'); await p.click('.res >> nth=0'); await p.waitForTimeout(200); await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(300);
+  await abrirAjuste(); ok(await p.locator('#ajuste-lista .item:has-text("Plato nuevo")').count() === 0 && await p.locator('#ajuste-lista .item').count() > 3, 'Un plato que creas tú no sale para ajustar, y los de antes sí: '); await p.keyboard.press('Escape');
+  await abrirAjuste(); const fila = p.locator('#ajuste-lista .item:has-text("Pollo con arroz y brócoli")');
+  ok(await fila.count() === 1 && (await fila.getAttribute('aria-pressed')) === 'false', 'Lista los platos sin ajustar, todos sin marcar por defecto (nada se divide sin que lo pidas)');
+  await fila.click(); await aplicar(); await p.click('nav >> text=Menú'); const g1 = await polloMenu();
+  ok(Math.abs(g1 - g0 / 1.7) < 1.1, `Ajustar el plato marcado: ${g0} g pasa a ${g1} g (tuya = total ÷ 1,7)`);
+  await p.click('.toast-undo'); await p.waitForTimeout(250); ok((await polloMenu()) === g0, 'Se puede deshacer');
+  await abrirAjuste(); await p.click('#ajuste-lista .item:has-text("Pollo con arroz y brócoli")'); await aplicar(); await p.click('nav >> text=Menú'); ok(Math.abs((await polloMenu()) - g1) < 1.1, 'Aplicado otra vez tras deshacer');
+  await abrirAjuste(); ok(await p.locator('#ajuste-nada').count() === 1, 'Al volver a abrirlo no sale nada: los platos listados quedaron ajustados o marcados como ya tuyos (no se reduce dos veces)'); await p.keyboard.press('Escape');
+  // un título largo nunca empuja fuera el botón de guardar, tampoco en pantallas estrechas
+  await p.setViewportSize({ width: 340, height: 700 }); await p.click('nav >> text=Ajustes'); await p.click('#aj-hogar'); await p.locator('#hogar-lista .row').first().click(); await p.waitForSelector('#hogar-nombre');
+  await p.fill('#hogar-nombre', 'Una persona con un nombre muy pero que muy largo'); await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(300);
+  await p.locator('#hogar-lista .row').first().click(); await p.waitForSelector('#hogar-nombre'); await p.waitForTimeout(300);
   const alcance = await p.evaluate(() => { const b = [...document.querySelectorAll('.sheet header .btn')].filter((x) => !x.classList.contains('plain')).pop(), r = b.getBoundingClientRect(), e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { dentro: r.left >= 0 && r.right <= innerWidth, encima: !!(e && b.contains(e)), txt: b.textContent }; });
-  ok(alcance.dentro && alcance.encima && alcance.txt === 'Ajustar', 'El botón "Ajustar" se ve y se puede pulsar en una pantalla de 340 px'); await p.keyboard.press('Escape'); await p.setViewportSize({ width: 390, height: 844 });
-  // datos viejos: "personas en casa = 2" -> todo para dos
-  await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('stub')); delete d.perfil.hogar; d.perfil.personas = 2; localStorage.setItem('congelar', '1'); localStorage.setItem('stub', JSON.stringify(d)); });
-  await p.reload(); await p.waitForSelector('h1.title'); await p.evaluate(() => localStorage.removeItem('congelar')); await p.click('nav >> text=Compra'); await p.waitForSelector('#compra-hogar');
-  const polloV = gramos(await p.locator('.shop .item:has-text("Pechuga de pollo") .q').textContent()); ok(Math.abs(+polloV - 2 * +pollo0) <= 2 && (await p.textContent('#compra-hogar')).includes('Persona 2'), `Datos viejos (2 personas): sigue saliendo el doble (${polloV} g) y aparece "Persona 2" para ajustarla`);
+  ok(alcance.dentro && alcance.encima && alcance.txt === 'Guardar', 'Con un título muy largo, el botón "Guardar" se ve y se puede pulsar en una pantalla de 340 px'); await p.keyboard.press('Escape'); await p.setViewportSize({ width: 390, height: 844 });
+  // datos viejos: "personas en casa = 2" -> todo para dos, igual que antes
+  const inyectar = async (fn) => { await p.evaluate(fn); await p.reload(); await p.waitForSelector('h1.title'); await p.evaluate(() => localStorage.removeItem('congelar')); await p.click('nav >> text=Compra'); await p.waitForSelector('#add-compra'); };
+  await inyectar(() => { const d = JSON.parse(localStorage.getItem('stub')); d.perfil.hogar = []; localStorage.setItem('congelar', '1'); localStorage.setItem('stub', JSON.stringify(d)); });
+  const polloSolo = gramos(await p.locator('.shop .item:has-text("Pechuga de pollo") .q').textContent());
+  await inyectar(() => { const d = JSON.parse(localStorage.getItem('stub')); delete d.perfil.hogar; d.perfil.personas = 2; localStorage.setItem('congelar', '1'); localStorage.setItem('stub', JSON.stringify(d)); });
+  const polloV = gramos(await p.locator('.shop .item:has-text("Pechuga de pollo") .q').textContent()); ok(Math.abs(polloV - 2 * polloSolo) <= 3 && (await p.textContent('#compra-hogar')).includes('Persona 2'), `Datos viejos (2 personas): sigue saliendo el doble (${polloSolo} g → ${polloV} g) y aparece "Persona 2" para ajustarla`);
   ok(errs.length === 0, 'Sin errores JS ' + errs.join('|'));
   await p.screenshot({ path: SHOTS + '/hogar.png' }); await b.close();
 })();

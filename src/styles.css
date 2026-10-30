@@ -417,3 +417,5 @@ b.over,.metric .over{color:var(--red)}
 .slot .cocinar-btn{padding:6px 0 0;min-height:0;font-size:14px;margin-top:2px}
 .cocinar .item .nm{display:block}
 .cocinar .item .reparto{display:block;color:var(--muted);font-size:12px;margin-top:2px;font-variant-numeric:tabular-nums}
+.ajuste .item[aria-pressed=true] .nm{color:var(--ink);text-decoration:none}
+.ajuste .item[aria-pressed=true] .reparto{text-decoration:none}
