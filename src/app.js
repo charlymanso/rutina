@@ -328,7 +328,7 @@ function platosGuardados(m = 'comida') { // platos distintos que ya usas, para r
 function elegirPlato({ titulo = 'Elegir plato', m = 'comida', actual = '', libre = false, quitar = null, onPick, onLibre }) {
   const gs = platosGuardados(m), nombresPropios = new Set(data.platosPropios.map((x) => x.t)), propios = gs.filter((x) => nombresPropios.has(x.t)), delMenu = gs.filter((x) => !nombresPropios.has(x.t));
   const fila = (txt, sub, fn, id) => h('button', { class: 'row tap res', type: 'button', id, onclick: fn }, h('div', { class: 'grow' }, txt, sub ? h('div', { class: 'sub num' }, sub) : null), h('span', { class: 'chev' }, actual && actual === txt ? '✓' : '›'));
-  const plato = (x) => fila(x.t, macroTxt(L.sumaItems(data, x.items)), () => { sh.close(); onPick(x); });
+  const plato = (x) => fila(x.t, macroTxt(L.sumaItems(data, x.items, 'comida')), () => { sh.close(); onPick(x); });
   const seccion = (t, rows) => h('section', { class: 'stack', style: 'gap:6px' }, h('div', { class: 'label', style: 'padding-left:4px' }, t), h('div', { class: 'group' }, rows));
   const sh = sheet({ title: titulo, cancel: 'Cerrar', body: [
     h('div', { class: 'group' }, fila('Gestionar platos', 'Crea y edita tus platos', () => { sheets.slice().forEach((x) => x.close()); go('ajustes'); irAj('platos'); }, 'elegir-gestionar')),
@@ -364,7 +364,7 @@ function borrarPlato(x) {
 }
 function crearPlato(onListo, existente = null) {
   const w = existente ? clone(existente) : { t: '', items: [] }, nombre = h('input', { type: 'text', id: 'nuevo-plato-nombre', value: w0(existente), placeholder: 'Ej. Bowl de pollo y arroz' }), total = h('div', { class: 'macros-live num', id: 'nuevo-plato-total', 'aria-live': 'polite' });
-  const pintar = () => { total.textContent = (L.hogar(data).length ? 'Plato completo: ' : 'Para ti: ') + macroTxt(L.sumaItems(data, w.items)); }, edit = itemsEditor(w.items, pintar); pintar();
+  const pintar = () => { total.textContent = L.comensales(data, 'comida').length || L.comensales(data, 'cena').length ? 'Plato completo: ' + macroTxt(L.sumaItems(data, w.items)) + ' · Para ti: ' + macroTxt(L.sumaItems(data, w.items, L.comensales(data, 'comida').length ? 'comida' : 'cena')) : 'Para ti: ' + macroTxt(L.sumaItems(data, w.items)); }, edit = itemsEditor(w.items, pintar); pintar();
   sheet({ title: existente ? 'Editar plato' : 'Nuevo plato', save: existente ? 'Guardar' : 'Guardar plato', body: [field('Nombre del plato', nombre), h('div', { class: 'label' }, (L.hogar(data).length ? 'Cantidades del plato (para todos)' : 'Tus cantidades')), edit, total, h('p', { class: 'mute small' }, 'Quedará guardado para elegirlo en cualquier comida.')],
     onSave: () => {
       const t = nombre.value.trim(); if (!t) return 'Escribe el nombre del plato.';
@@ -894,7 +894,7 @@ function viewAjustes() {
       return subpagina('Platos', 'Arma platos con tus ingredientes y úsalos en cualquier comida',
         h('div', { class: 'row', style: 'padding:0;gap:10px;flex-wrap:wrap' }, h('button', { class: 'btn', id: 'plato-nuevo', onclick: () => crearPlato() }, 'Nuevo plato'),
           delMenu.length ? h('button', { class: 'btn sec', id: 'platos-importar', onclick: () => { delMenu.forEach((x) => data.platosPropios.push({ t: x.t, items: clone(x.items) })); commit(); toast(`${delMenu.length} ${delMenu.length === 1 ? 'plato guardado' : 'platos guardados'}.`); } }, 'Guardar los de mi menú') : null),
-        ps.length ? h('div', { class: 'group', id: 'platos-lista' }, ps.map((x) => deslizable(tapRow(x.t, macroTxt(L.sumaItems(data, x.items)), () => crearPlato(null, x)), () => borrarPlato(x)))) : h('p', { class: 'mute small', id: 'platos-vacio', style: 'padding-left:4px' }, 'Aún no tienes platos guardados. Crea uno nuevo' + (delMenu.length ? ' o guarda los que ya tienes en tu menú.' : '.')));
+        ps.length ? h('div', { class: 'group', id: 'platos-lista' }, ps.map((x) => deslizable(tapRow(x.t, macroTxt(L.sumaItems(data, x.items, 'comida')), () => crearPlato(null, x)), () => borrarPlato(x)))) : h('p', { class: 'mute small', id: 'platos-vacio', style: 'padding-left:4px' }, 'Aún no tienes platos guardados. Crea uno nuevo' + (delMenu.length ? ' o guarda los que ya tienes en tu menú.' : '.')));
     }
     case 'datos': return subpagina('Datos y copias', 'Tu plan y tus registros',
       grupo(null, tapRow('Guardar una copia', 'Exporta todo a un archivo.', async () => { if (await store.exportar(data)) toast('Copia guardada.'); }),
