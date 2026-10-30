@@ -9,18 +9,20 @@ const gramos = (t) => { const m = String(t).replace(/\./g, '').match(/([\d,]+)\s
   const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message));
   await p.addInitScript(() => { window.rutina = { platform: 'win32', load: async () => { try { return JSON.parse(localStorage.getItem('stub')); } catch { return null; } }, save: async (x) => { if (localStorage.getItem('congelar')) return; localStorage.setItem('stub', JSON.stringify(x)); }, version: async () => '0' }; });
   await p.goto(BASE + '/index.html'); await p.waitForSelector('.sheet'); await p.fill('input[placeholder="Tu nombre"]', 'Ana'); await p.click('text=Empezar con un plan de ejemplo'); await p.waitForSelector('h1.title');
-  const compra = async () => { await p.click('nav >> text=Compra'); await p.waitForSelector('#compra-hogar'); return (await p.locator('.shop .item .q').allTextContents()); };
-  const antes = await p.evaluate(() => 0); await p.click('nav >> text=Compra'); await p.waitForSelector('#compra-hogar');
-  ok((await p.textContent('#compra-hogar')).includes('Solo para ti'), 'Compra: al principio "Solo para ti"'); ok(await p.locator('.stepper').count() === 0, 'Ya no hay selector de personas en Compra');
+  await p.click('nav >> text=Compra'); await p.waitForSelector('#add-compra');
+  ok(await p.locator('#compra-hogar').count() === 0 && await p.locator('.stepper').count() === 0, 'Quien come solo: Compra no muestra nada de personas');
   const pollo0 = gramos(await p.locator('.shop .item:has-text("Pechuga de pollo") .q').textContent());
-  await p.click('nav >> text=Ajustes'); ok(await p.locator('#aj-hogar').count() === 1 && (await p.textContent('#aj-hogar')).includes('Solo tú'), 'Ajustes tiene "Con quién comes"'); ok(!(await p.textContent('body')).includes('Personas en casa'), 'Ya no está "Personas en casa" en Perfil');
-  await p.click('#aj-hogar'); ok(await p.locator('#hogar-vacio').count() === 1, 'Vacío: explica que comes solo');
-  await p.click('#hogar-anadir'); await p.waitForSelector('#hogar-nombre');
-  ok((await p.textContent('#hogar-pct')) === '70 %' && (await p.getAttribute('#hogar-c-comida', 'aria-pressed')) === 'true' && (await p.getAttribute('#hogar-c-cena', 'aria-pressed')) === 'true' && (await p.getAttribute('#hogar-c-desayuno', 'aria-pressed')) === 'false', 'Por defecto: 70 % y solo comida y cena');
-  await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); ok((await p.locator('.sheet').last().textContent()).includes('Escribe un nombre'), 'Pide nombre');
+  await p.click('nav >> text=Ajustes'); ok(await p.locator('#aj-hogar').count() === 0, 'Quien come solo: no sale "Con quién comes"'); ok(!(await p.textContent('body')).includes('Con quién comes'), 'Y no se menciona en ningún sitio de Ajustes');
+  await p.click('#aj-perfil'); ok((await p.textContent('#personas-n')) === '1' && await p.locator('#personas-menos').count() === 1, 'En Perfil: "Personas en casa" = 1');
+  await p.click('#personas-mas'); ok((await p.textContent('#personas-n')) === '2', 'Al subir a 2 personas...'); await p.click('#aj-atras');
+  ok(await p.locator('#aj-hogar').count() === 1 && (await p.textContent('#aj-hogar')).includes('Tú y Persona 2'), '...aparece "Con quién comes" en Ajustes');
+  await p.click('#aj-hogar'); ok((await p.textContent('#hogar-lista')).includes('70 %') && (await p.textContent('#hogar-lista')).includes('comida, cena'), 'La persona nueva entra al 70 % con comida y cena');
+  await p.locator('#hogar-lista .row').first().click(); await p.waitForSelector('#hogar-nombre');
+  ok((await p.textContent('#hogar-pct')) === '70 %' && (await p.getAttribute('#hogar-c-desayuno', 'aria-pressed')) === 'false', 'Por defecto: 70 % y solo comida y cena');
+  await p.fill('#hogar-nombre', ''); await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); ok((await p.locator('.sheet').last().textContent()).includes('Escribe un nombre'), 'Pide nombre');
   await p.fill('#hogar-nombre', 'Marta'); await p.click('#hogar-mas'); await p.click('#hogar-menos'); await p.click('#hogar-menos'); ok((await p.textContent('#hogar-pct')) === '65 %' && (await p.textContent('#hogar-ejemplo')).includes('130 g'), 'El porcentaje se ajusta de 5 en 5 con un ejemplo: ' + (await p.textContent('#hogar-ejemplo')).slice(0, 40));
-  await p.click('#hogar-mas'); await p.click('#hogar-c-comida'); await p.click('#hogar-c-comida'); await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(300);
-  ok((await p.textContent('#hogar-lista')).includes('Marta') && (await p.textContent('#hogar-lista')).includes('70 %') && (await p.textContent('#hogar-lista')).includes('comida, cena'), 'Queda en la lista: ' + (await p.textContent('#hogar-lista')).replace(/\s+/g, ' ').slice(0, 70));
+  await p.click('#hogar-mas'); await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(300);
+  ok((await p.textContent('#hogar-lista')).includes('Marta') && (await p.textContent('#hogar-lista')).includes('70 %'), 'Queda en la lista: ' + (await p.textContent('#hogar-lista')).replace(/\s+/g, ' ').slice(0, 70));
   await p.click('#aj-atras'); ok((await p.textContent('#aj-hogar')).includes('Tú y Marta'), 'El resumen dice "Tú y Marta"');
   await p.click('nav >> text=Compra'); await p.waitForSelector('#compra-hogar'); ok((await p.textContent('#compra-hogar')).includes('Para ti y Marta'), 'Compra: "Para ti y Marta"');
   const pollo1 = gramos(await p.locator('.shop .item:has-text("Pechuga de pollo") .q').textContent());
@@ -41,6 +43,10 @@ const gramos = (t) => { const m = String(t).replace(/\./g, '').match(/([\d,]+)\s
   await p.click('nav >> text=Menú'); const g1 = gramos((await p.textContent('#plato-comida-0')).match(/Pechuga de pollo ([\d,.]+) g/)[1] + ' g');
   const esperado = g0 / (1 + 0.7); ok(Math.abs(g1 - esperado) < 1.1, `Ajustar mis platos: ${g0} g pasa a ${g1} g (tuya = total ÷ 1,7)`);
   await p.click('.toast-undo'); await p.waitForTimeout(250); ok(gramos((await p.textContent('#plato-comida-0')).match(/Pechuga de pollo ([\d,.]+) g/)[1] + ' g') === g0, 'Y se puede deshacer');
+  // la ventana de confirmación (título largo) deja siempre el botón al alcance, también en pantallas estrechas
+  await p.setViewportSize({ width: 340, height: 700 }); await p.click('nav >> text=Ajustes'); await p.click('#aj-hogar'); await p.click('#hogar-ajustar'); await p.waitForTimeout(400);
+  const alcance = await p.evaluate(() => { const b = [...document.querySelectorAll('.sheet header .btn')].filter((x) => !x.classList.contains('plain')).pop(), r = b.getBoundingClientRect(), e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { dentro: r.left >= 0 && r.right <= innerWidth, encima: !!(e && b.contains(e)), txt: b.textContent }; });
+  ok(alcance.dentro && alcance.encima && alcance.txt === 'Ajustar', 'El botón "Ajustar" se ve y se puede pulsar en una pantalla de 340 px'); await p.keyboard.press('Escape'); await p.setViewportSize({ width: 390, height: 844 });
   // datos viejos: "personas en casa = 2" -> todo para dos
   await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('stub')); delete d.perfil.hogar; d.perfil.personas = 2; localStorage.setItem('congelar', '1'); localStorage.setItem('stub', JSON.stringify(d)); });
   await p.reload(); await p.waitForSelector('h1.title'); await p.evaluate(() => localStorage.removeItem('congelar')); await p.click('nav >> text=Compra'); await p.waitForSelector('#compra-hogar');

@@ -362,7 +362,7 @@ function editarPersona(x) {
 function ajustarPlatosAlHogar() {
   const hg = L.hogar(data); if (!hg.length) return;
   const factor = (m) => 1 + hg.filter((p) => p.comidas.includes(m)).reduce((a, p) => a + p.f, 0);
-  confirmSheet('¿Dejar tus platos con solo tus cantidades?', 'Si en tus platos de comida y cena pusiste las cantidades de todos, esto las reparte y deja la tuya. Se aplica a los platos del menú y a los de Ajustes > Platos. Hazlo una sola vez: si lo repites, vuelve a dividir.', 'Ajustar', () => {
+  confirmSheet('¿Ajustar tus platos?', 'Si en tus platos de comida y cena pusiste las cantidades de todos, esto las reparte y deja la tuya. Se aplica a los platos del menú y a los de Ajustes > Platos. Hazlo una sola vez: si lo repites, vuelve a dividir.', 'Ajustar', () => {
     const antes = { menu: clone(data.menu), platos: clone(data.platosPropios) };
     const adj = (pl, m) => { if (!pl || pl.libre) return; pl.items = (pl.items || []).map(([id, q]) => { const x = q / factor(m), ud = L.ing(data, id).u === 'ud'; return [id, ud ? (x >= 1.5 ? Math.round(x) : Math.max(0.5, Math.round(x * 2) / 2)) : Math.round(x)]; }); };
     data.menu.semanas.forEach((w) => w.forEach((d) => { adj(d.comida, 'comida'); adj(d.cena, 'cena'); }));
@@ -828,7 +828,7 @@ function viewCompra() {
   return h('div', { class: 'page' },
     h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, 'Compra'), h('p', { class: 'subtitle num' }, `${hechos} de ${total} en el carro`)),
       seg([[2, 'Dos semanas'], [0, 'Esta semana'], [1, 'La que viene']], S.compSel, (v) => { S.compSel = v; render(); })),
-    h('div', { class: 'head' }, h('button', { class: 'btn plain', id: 'compra-hogar', style: 'padding-left:0;text-align:left', onclick: () => { go('ajustes'); irAj('hogar'); } }, L.hogar(data).length ? `Para ti y ${nombresHogar()}` : 'Solo para ti · añadir a alguien'),
+    h('div', { class: 'head' }, L.hogar(data).length ? h('button', { class: 'btn plain', id: 'compra-hogar', style: 'padding-left:0;text-align:left', onclick: () => { go('ajustes'); irAj('hogar'); } }, `Para ti y ${nombresHogar()}`) : h('span'),
       h('div', {}, h('button', { class: 'btn sec', onclick: copiar, disabled: !total }, 'Copiar lista'), ' ', h('button', { class: 'btn plain', onclick: () => { data.compra[k] = { marcados: {} }; data.extrasCompra.forEach((x) => { x.ok = false; }); commit(); }, disabled: !hechos }, 'Desmarcar todo'))),
     h('button', { class: 'btn sec', id: 'add-compra', style: 'align-self:flex-start', onclick: anadirCompra }, '+ Añadir a la lista'),
     total ? h('div', { class: 'shop' }, secciones) : h('div', { class: 'card empty' }, h('p', {}, 'Tu lista aparecerá aquí cuando añadas platos al menú o cosas por tu cuenta.'), h('button', { class: 'btn', onclick: () => go('semana') }, 'Ir al menú')));
@@ -861,7 +861,11 @@ function viewAjustes() {
   switch (S.aj) {
     case 'cuenta': return subpagina('Cuenta', 'Sincroniza tu plan entre tus dispositivos', cuentaGrupo());
     case 'perfil': return subpagina('Perfil', null,
-      grupo(null, rowOf('Nombre', txtAj(p.nombre, (v) => { p.nombre = v; commit(); }, 'Tu nombre'))));
+      grupo(null, rowOf('Nombre', txtAj(p.nombre, (v) => { p.nombre = v; commit(); }, 'Tu nombre')),
+        rowOf('Personas en casa', h('div', { class: 'stepper' }, h('button', { 'aria-label': 'Menos personas', id: 'personas-menos', onclick: () => { const lista = L.hogar(data); if (lista.length) sacar(lista, lista.length - 1, lista[lista.length - 1].n, commit); } }, '−'),
+          h('span', { class: 'num', id: 'personas-n' }, String(1 + L.hogar(data).length)),
+          h('button', { 'aria-label': 'Más personas', id: 'personas-mas', onclick: () => { const lista = (data.perfil.hogar = L.hogar(data)); if (lista.length >= 8) return; const n = lista.length + 2; lista.push({ id: 'h' + Date.now().toString(36), n: `Persona ${n}`, f: 0.7, comidas: ['comida', 'cena'] }); commit(); if (lista.length === 1) toast('Ahora puedes ajustar su ración en «Con quién comes».'); } }, '+')),
+          'Si comes con alguien, súmalo y ajustas su ración y qué comidas compartís.')));
     case 'objetivos': return subpagina('Objetivos diarios', 'Tus calorías y tu proteína',
       h('div', { class: 'card', style: 'gap:10px' }, h('div', {}, h('b', {}, 'Calcúlalos por ti'), h('p', { class: 'mute small' }, 'A partir de tu edad, peso, altura y actividad, con las mismas fórmulas que Macrómetro.')), h('button', { class: 'btn', id: 'calcular-objetivos', style: 'align-self:flex-start', onclick: () => abrirObjetivo() }, 'Calcular mis objetivos')),
       grupo('A mano', rowOf('Día con entreno · calorías', numField(o.gym.kcal, (v) => { o.gym.kcal = v; commit(); })), rowOf('Día con entreno · proteína (g)', numField(o.gym.prot, (v) => { o.gym.prot = v; commit(); })),
@@ -899,7 +903,7 @@ function viewAjustes() {
       h('div', {}, h('h1', { class: 'title' }, 'Ajustes')),
       grupo(null, Nube.nubeActiva() ? filaAj('cuenta', 'cuenta', '#0a84ff', 'Cuenta', u ? u.email : 'Sin iniciar sesión') : null, filaAj('perfil', 'perfil', '#8e8e93', 'Perfil', p.nombre || 'Tu nombre y tu ciudad')),
       grupo(null, filaAj('objetivos', 'objetivos', '#ff9f0a', 'Objetivos diarios', `${L.miles(o.gym.kcal)} / ${L.miles(o.sin.kcal)} kcal · ${o.gym.prot} g de proteína`)),
-      grupo(null, filaAj('hogar', 'hogar', '#34c759', 'Con quién comes', L.hogar(data).length ? `Tú y ${nombresHogar()}` : 'Solo tú'), filaAj('platos', 'platos', '#ff6b35', 'Platos', data.platosPropios.length ? `${data.platosPropios.length} ${data.platosPropios.length === 1 ? 'plato guardado' : 'platos guardados'}` : 'Crea tus platos con ingredientes')),
+      grupo(null, ...(L.hogar(data).length ? [filaAj('hogar', 'hogar', '#34c759', 'Con quién comes', `Tú y ${nombresHogar()}`)] : []), filaAj('platos', 'platos', '#ff6b35', 'Platos', data.platosPropios.length ? `${data.platosPropios.length} ${data.platosPropios.length === 1 ? 'plato guardado' : 'platos guardados'}` : 'Crea tus platos con ingredientes')),
       grupo(null, filaAj('datos', 'datos', '#5e5ce6', 'Datos y copias', 'Copia de seguridad y borrado'), filaAj('acerca', 'acerca', '#8e8e93', 'Acerca de Rutina', `Versión ${S.version || 'Web'}`)));
   }
 }

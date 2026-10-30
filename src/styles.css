@@ -407,3 +407,7 @@ b.over,.metric .over{color:var(--red)}
 
 .bloque-cab{border-top:1px solid var(--line);margin-top:6px;padding-top:14px!important}
 .bloque-titulo{font-size:20px;font-weight:700;letter-spacing:-.01em}
+
+/* Cabecera de las ventanas: un título largo nunca debe empujar fuera el botón de guardar */
+.sheet header h3{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.sheet header .btn{flex-shrink:0}
