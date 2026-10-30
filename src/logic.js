@@ -59,9 +59,10 @@ export const carbDe = (data, id, q) => (ing(data, id).c || 0) * porUnidad(ing(da
 export const grasaDe = (data, id, q) => (ing(data, id).f || 0) * porUnidad(ing(data, id), q);
 export const tieneMacros = (g) => g.c != null && g.f != null;
 // Suma calorías y macros de una lista [[id, cantidad], ...]. `completo` = false si algún ingrediente no tiene hidratos/grasa.
-export function sumaItems(data, items) {
+export function sumaItems(data, items, m) {   // m: comida a la que pertenece el plato; si se indica, solo cuenta TU parte cuando la compartes
   const r = { k: 0, p: 0, c: 0, f: 0, completo: true };
-  for (const [id, q] of items || []) {
+  for (const [id, q0] of items || []) {
+    const q = m ? miCantidad(data, id, q0, m) : q0;
     r.k += kcalDe(data, id, q); r.p += protDe(data, id, q); r.c += carbDe(data, id, q); r.f += grasaDe(data, id, q);
     if (!tieneMacros(ing(data, id))) r.completo = false;
   }
@@ -103,7 +104,7 @@ export function totalDia(data, d, { extras = true, soloHechos = false, cambios =
     if (hechos && !hechos[m]) continue;
     const pl = platoDelDia(data, d, m, { cambios }); if (!pl) continue;
     if (pl.libre) { libre = true; k += data.perfil.libre.kcal; p += data.perfil.libre.prot; completo = false; continue; }
-    suma(sumaItems(data, pl.items));
+    suma(sumaItems(data, pl.items, m));
   }
   const ex = extras ? sumaExtras(extrasDe(data, iso(d))) : { k: 0, p: 0, c: 0, f: 0 };
   return { k: k + ex.k, p: p + ex.p, c: c + ex.c, f: f + ex.f, libre, completo, extras: ex.k };
@@ -129,17 +130,28 @@ export function cantidadCompra(data, id, q) {
 // ---- lista de la compra ----
 // sel: 0 esta semana, 1 la siguiente, 2 las dos. Devuelve { id: cantidad }
 // ---- con quién comes ----
-// Los platos llevan SOLO tus cantidades. Cada persona de perfil.hogar come una parte de tu ración (f) en las comidas que comparte.
+// Los platos llevan las cantidades de TODOS los que comen ese plato (lo que se cocina y se compra, tal cual).
+// Cada persona de perfil.hogar come una parte (f) de tu ración en las comidas que comparte; tus calorías y macros salen solo de tu parte.
 export const COMIDAS_HOGAR = [['desayuno', 'Desayuno'], ['media', 'Media mañana'], ['comida', 'Comida'], ['merienda', 'Merienda'], ['cena', 'Cena']];
 export const hogar = (data) => (Array.isArray(data.perfil.hogar) ? data.perfil.hogar : []);
-// Lo que hay que comprar de un ingrediente para una comida: lo tuyo más la ración de cada persona que la comparte.
-// Con cosas por unidades se redondea hacia arriba (2 fajitas al 70 % → 2 fajitas), porque nadie se come 1,4.
+export const comensales = (data, m) => hogar(data).filter((p) => (p.comidas || []).includes(m));
+const aPiezas = (x) => (x >= 1.5 ? Math.round(x) : Math.max(0.5, Math.round(x * 2) / 2));   // por unidades nadie se come 1,4: se redondea
+export function miCantidad(data, id, q, m) {
+  const cs = comensales(data, m); if (!cs.length) return q;
+  const x = q / (1 + cs.reduce((a, p) => a + p.f, 0)); return ing(data, id).u === 'ud' ? aPiezas(x) : x;
+}
+// Al revés: si has pensado la cantidad para ti, cuánto lleva el plato completo
+export function cantidadTotal(data, id, qMia, m) {
+  const cs = comensales(data, m); if (!cs.length) return qMia;
+  const x = qMia * (1 + cs.reduce((a, p) => a + p.f, 0)); return ing(data, id).u === 'ud' ? aPiezas(x) : x;
+}
+// Cómo se reparte la cantidad total de un ingrediente entre los que comen ese plato
 export function repartoHogar(data, id, q, m) {
-  const ud = ing(data, id).u === 'ud', out = [{ n: 'Tú', q }];
-  for (const p of hogar(data)) if ((p.comidas || []).includes(m)) { const x = q * p.f; out.push({ n: p.n, q: ud && x >= 1 ? Math.ceil(x - 1e-9) : x }); }
+  const cs = comensales(data, m), mia = miCantidad(data, id, q, m), out = [{ n: 'Tú', q: mia }]; if (!cs.length) return out;
+  const ud = ing(data, id).u === 'ud', suma = 1 + cs.reduce((a, p) => a + p.f, 0);
+  cs.forEach((p) => out.push({ n: p.n, q: ud ? (cs.length === 1 ? q - mia : aPiezas(q * p.f / suma)) : q * p.f / suma }));
   return out;
 }
-export const paraTodos = (data, id, q, m) => repartoHogar(data, id, q, m).reduce((a, x) => a + x.q, 0);
 export function listaCompra(data, sel, desde = hoy()) {
   if (sel === 2) {
     const a = listaCompra(data, 0, desde), b = listaCompra(data, 1, desde);
@@ -147,10 +159,10 @@ export function listaCompra(data, sel, desde = hoy()) {
     return a;
   }
   const lun = addDays(lunesDe(desde), sel * 7), tot = {};
-  const suma = (id, q, m) => { tot[id] = (tot[id] || 0) + paraTodos(data, id, q, m); };
+  const suma = (id, q) => { tot[id] = (tot[id] || 0) + q; };   // los platos ya llevan las cantidades de todos
   semanaDe(data, lun).forEach((dm, i) => {
-    for (const m of ['comida', 'cena']) { const pl = dm[m]; if (pl && !pl.libre) (pl.items || []).forEach(([id, q]) => suma(id, q, m)); }
-    for (const c of FIJAS) { const f = fijoDia(data, addDays(lun, i), c); if (f) f.items.forEach(([id, q]) => suma(id, q, c)); }
+    for (const m of ['comida', 'cena']) { const pl = dm[m]; if (pl && !pl.libre) (pl.items || []).forEach(([id, q]) => suma(id, q)); }
+    for (const c of FIJAS) { const f = fijoDia(data, addDays(lun, i), c); if (f) f.items.forEach(([id, q]) => suma(id, q)); }
   });
   return tot;
 }

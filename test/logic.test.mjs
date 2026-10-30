@@ -91,9 +91,9 @@ d.perfil.hogar = [];
 const c1 = L.listaCompra(d, 0, lun);
 // huevos: 3 (lun) + 2 (jue) + 3 (dom) + 0 = 8 ; aceite incluido
 assert.equal(c1.huevo, 8);
-d.perfil.hogar = [{ id: 'h1', n: 'Pareja', f: 1, comidas: ['desayuno', 'media', 'comida', 'merienda', 'cena'] }];   // alguien que come igual que tú en todo
-assert.equal(L.listaCompra(d, 0, lun).huevo, 16);
-assert.equal(L.listaCompra(d, 2, lun).huevo, 16 * 2); // dos semanas del mismo ciclo
+d.perfil.hogar = [{ id: 'h1', n: 'Pareja', f: 1, comidas: ['desayuno', 'media', 'comida', 'merienda', 'cena'] }];   // alguien que come igual que tú en todo: los platos ya llevan las cantidades de todos, la compra no cambia
+assert.equal(L.listaCompra(d, 0, lun).huevo, 8);
+assert.equal(L.listaCompra(d, 2, lun).huevo, 8 * 2); // dos semanas del mismo ciclo
 // comida libre no aporta ingredientes; fijos cuentan los 7 días (7 × 50 g de avena)
 d.perfil.hogar = [];
 assert.equal(L.listaCompra(d, 0, lun).avena, 350);
@@ -130,23 +130,32 @@ assert.equal(L.esVersionNueva('0.9.9', 'v1.0.0'), true);
 assert.equal(L.esVersionNueva('0.1.10', 'v0.1.9'), false);
 
 // ---- con quién comes ----
+// Los platos llevan las cantidades de TODOS los que comen; tus calorías y macros salen solo de tu parte.
 {
   const h = makeTemplate(); h.menu.ancla = '2026-10-26'; const l0 = L.parseISO('2026-10-26');
-  h.ingredientes.faj = { n: 'Fajita', u: 'ud', k: 150, p: 5, s: 'pan' }; h.ingredientes.poll = { n: 'Pollo', u: 'g', k: 120, p: 23, s: 'carne' };
+  h.ingredientes.faj = { n: 'Fajita', u: 'ud', k: 150, p: 5, s: 'pan', pl: 'Fajitas' }; h.ingredientes.poll = { n: 'Pollo', u: 'g', k: 120, p: 23, c: 0, f: 3, s: 'carne' };
   h.menu.semanas[0].forEach((dm) => { dm.comida = null; dm.cena = null; }); h.menu.fijos.desayuno.on = true; h.menu.fijos.desayuno.items = [['poll', 50]]; ['media', 'merienda'].forEach((k) => { h.menu.fijos[k].on = false; });
-  h.menu.semanas[0][0].comida = { t: 'Fajitas', items: [['faj', 2], ['poll', 200]] }; h.menu.semanas[0][1].cena = { t: 'Pollo', items: [['poll', 100]] };
+  h.menu.semanas[0][0].comida = { t: 'Fajitas', items: [['faj', 4], ['poll', 340]] }; h.menu.semanas[0][1].cena = { t: 'Pollo', items: [['poll', 170]] };
   h.perfil.hogar = [];
-  let c = L.listaCompra(h, 0, l0); assert.equal(c.faj, 2); assert.equal(c.poll, 200 + 100 + 7 * 50, 'solo tú: todo tal cual');
+  const solo = L.listaCompra(h, 0, l0), kSolo = L.totalDia(h, l0, { extras: false }).k;
+  assert.equal(solo.faj, 4); assert.equal(solo.poll, 340 + 170 + 7 * 50);
   h.perfil.hogar = [{ id: 'h1', n: 'Pareja', f: 0.7, comidas: ['comida', 'cena'] }];
-  c = L.listaCompra(h, 0, l0);
-  assert.equal(c.faj, 4, 'fajitas por unidades: 2 para ti y 2 para tu pareja (1,4 se redondea hacia arriba)');
-  assert.ok(Math.abs(c.poll - (200 * 1.7 + 100 * 1.7 + 7 * 50)) < 1e-9, 'en gramos: 70 % de ración en comida y cena, y el desayuno solo lo tuyo');
-  assert.equal(L.paraTodos(h, 'poll', 100, 'desayuno'), 100, 'lo que no compartís no se multiplica');
-  assert.equal(L.paraTodos(h, 'faj', 0.5, 'comida'), 0.5 + 0.35, 'menos de una unidad no se redondea');
-  assert.deepEqual(L.repartoHogar(h, 'faj', 2, 'comida').map((x) => [x.n, x.q]), [['Tú', 2], ['Pareja', 2]], 'reparto: por unidades 2 y 2'); assert.deepEqual(L.repartoHogar(h, 'poll', 100, 'cena').map((x) => [x.n, Math.round(x.q)]), [['Tú', 100], ['Pareja', 70]]); assert.equal(L.repartoHogar(h, 'poll', 100, 'desayuno').length, 1, 'quien no comparte no sale');
-  h.perfil.hogar.push({ id: 'h2', n: 'Otra', f: 0.5, comidas: ['cena'] }); assert.equal(L.paraTodos(h, 'poll', 100, 'cena'), 100 + 70 + 50, 'varias personas'); assert.equal(L.paraTodos(h, 'poll', 100, 'comida'), 170);
-  const antes = L.totalDia(h, l0, { extras: false }).k; h.perfil.hogar = []; assert.equal(L.totalDia(h, l0, { extras: false }).k, antes, 'tus calorías no cambian con quién come contigo');
-  // datos viejos: "personas en casa" = 2 -> todo para dos, igual que antes
+  assert.deepEqual(L.listaCompra(h, 0, l0), solo, 'la compra y "para cocinar" son las cantidades del plato, tal cual: no se multiplica nada');
+  assert.ok(Math.abs(L.miCantidad(h, 'poll', 340, 'comida') - 200) < 1e-9, 'tu parte en gramos: 340 g con el 70 % → 200 g para ti');
+  assert.equal(L.miCantidad(h, 'faj', 4, 'comida'), 2, 'por unidades: 4 fajitas entre dos = 2 cada uno');
+  assert.equal(L.miCantidad(h, 'poll', 50, 'desayuno'), 50, 'lo que no compartís se queda igual');
+  assert.deepEqual(L.repartoHogar(h, 'poll', 340, 'comida').map((x) => [x.n, Math.round(x.q)]), [['Tú', 200], ['Pareja', 140]]);
+  assert.deepEqual(L.repartoHogar(h, 'faj', 4, 'comida').map((x) => [x.n, x.q]), [['Tú', 2], ['Pareja', 2]], 'las piezas se reparten enteras');
+  assert.equal(L.repartoHogar(h, 'poll', 50, 'desayuno').length, 1);
+  assert.ok(Math.abs(L.cantidadTotal(h, 'poll', 200, 'comida') - 340) < 1e-9, 'al revés: lo que has pensado para ti → lo que lleva el plato');
+  // las calorías son solo tuyas
+  const d1 = L.totalDia(h, l0, { extras: false }), esperado = (2 * 150) + (200 * 1.2) + 50 * 1.2;
+  assert.ok(Math.abs(d1.k - esperado) < 1, `tus calorías del lunes salen de tu parte (${d1.k} ≈ ${esperado})`);
+  assert.ok(d1.k < kSolo, 'con quien comparte, tus calorías son menos que las del plato entero');
+  assert.equal(L.sumaItems(h, h.menu.semanas[0][0].comida.items).k > L.sumaItems(h, h.menu.semanas[0][0].comida.items, 'comida').k, true);
+  h.perfil.hogar.push({ id: 'h2', n: 'Otra', f: 0.5, comidas: ['cena'] }); assert.ok(Math.abs(L.miCantidad(h, 'poll', 220, 'cena') - 100) < 1e-9, 'varias personas: 220 g entre 2,2 raciones = 100 g'); assert.ok(Math.abs(L.miCantidad(h, 'poll', 340, 'comida') - 200) < 1e-9);
+  h.perfil.hogar = []; assert.equal(L.totalDia(h, l0, { extras: false }).k, kSolo, 'sin nadie, todo igual que siempre');
+  // datos viejos: "personas en casa" = 2 -> aparece una persona para ajustar
   const viejo = normalize({ perfil: { listo: true, personas: 2 }, menu: null }); assert.equal(viejo.perfil.hogar.length, 1); assert.equal(viejo.perfil.hogar[0].f, 1); assert.equal(viejo.perfil.hogar[0].comidas.length, 5); assert.ok(!('personas' in viejo.perfil));
   assert.deepEqual(normalize({ perfil: { personas: 1 } }).perfil.hogar, []);
   assert.deepEqual(normalize({ perfil: { hogar: [{ n: 'Ana', f: 9, comidas: ['comida', 'x'] }, null, 5] } }).perfil.hogar, [{ id: 'h1', n: 'Ana', f: 2, comidas: ['comida'] }], 'normalize limpia');

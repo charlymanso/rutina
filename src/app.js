@@ -258,7 +258,7 @@ function idDeBase(nombre) { // reutiliza tu ingrediente si ya lo tienes; si no, 
 function recomendarMenu(lun, semana) {
   const opc = { dieta: 'omnivora', excluir: new Set(), semilla: Math.floor(Math.random() * 1e6) };
   const lista = h('div', { class: 'group', id: 'rec-lista' }), nota = h('p', { class: 'mute small', id: 'rec-nota' });
-  const fijos = (i) => L.FIJAS.reduce((a, c) => { const f = L.fijoDia(data, L.addDays(lun, i), c); if (!f) return a; const t = L.sumaItems(data, f.items); return { k: a.k + t.k, p: a.p + t.p }; }, { k: 0, p: 0 });
+  const fijos = (i) => L.FIJAS.reduce((a, c) => { const f = L.fijoDia(data, L.addDays(lun, i), c); if (!f) return a; const t = L.sumaItems(data, f.items, c); return { k: a.k + t.k, p: a.p + t.p }; }, { k: 0, p: 0 });
   let prop = null;
   function pintar() {
     const dias = Array.from({ length: 7 }, (_, i) => { const o = L.objetivo(data, L.addDays(lun, i)), fj = fijos(i); return { k: Math.max(600, o.kcal - fj.k), p: Math.max(30, o.prot - fj.p) }; });
@@ -279,7 +279,7 @@ function recomendarMenu(lun, semana) {
     extra: h('button', { class: 'btn sec', id: 'rec-otra', onclick: () => { opc.semilla = (opc.semilla + 7919) % 1000003; pintar(); } }, 'Otra propuesta'),
     onSave: () => {
       if (!prop) return 'No hay propuesta que aplicar.';
-      prop.forEach((d, i) => { for (const m of ['comida', 'cena']) semana[i][m] = { t: d[m].t, items: d[m].items.map(([n, q]) => [idDeBase(n), q]) }; });
+      prop.forEach((d, i) => { for (const m of ['comida', 'cena']) semana[i][m] = { t: d[m].t, items: d[m].items.map(([n, q]) => { const id = idDeBase(n); return [id, L.cantidadTotal(data, id, q, m)]; }) }; });
       commit(); toast('Menú actualizado. Puedes cambiar cualquier plato tocándolo.');
     } });
   pintar();
@@ -345,7 +345,7 @@ function editarPersona(x) {
   const nom = h('input', { type: 'text', id: 'hogar-nombre', value: w.n, placeholder: 'Ej. Pareja', autocomplete: 'off' }), pct = h('span', { class: 'num', id: 'hogar-pct' }), chips = h('div', { class: 'chips', id: 'hogar-comidas', role: 'group', 'aria-label': 'Comidas que compartís' }), ejemplo = h('p', { class: 'mute small', id: 'hogar-ejemplo' });
   const mover = (d) => { w.f = Math.min(2, Math.max(0.1, Math.round((w.f + d) * 100) / 100)); pintar(); };
   function pintar() {
-    pct.textContent = Math.round(w.f * 100) + ' %'; ejemplo.textContent = `Si tú comes 200 g, ${w.n.trim() || 'esta persona'} come ${Math.round(200 * w.f)} g. Lo que va por unidades se redondea hacia arriba.`;
+    pct.textContent = Math.round(w.f * 100) + ' %'; ejemplo.textContent = `Si el plato lleva 340 g en total, tú comes ${Math.round(340 / (1 + w.f))} g y ${w.n.trim() || 'esta persona'} ${Math.round(340 * w.f / (1 + w.f))} g. Por unidades se reparte en piezas enteras.`;
     chips.replaceChildren(...L.COMIDAS_HOGAR.map(([k, t]) => h('button', { type: 'button', class: 'chipopt', id: 'hogar-c-' + k, 'aria-pressed': String(w.comidas.includes(k)), onclick: () => { w.comidas = w.comidas.includes(k) ? w.comidas.filter((y) => y !== k) : [...w.comidas, k]; pintar(); } }, t)));
   }
   nom.addEventListener('input', () => { w.n = nom.value; pintar(); }); pintar();
@@ -358,42 +358,20 @@ function editarPersona(x) {
     if (i >= 0) lista[i] = nuevo; else lista.push(nuevo); commit();
   } });
 }
-/* Si algunos platos ya llevan las cantidades de todos, deja elegir cuáles repartir para dejar solo las tuyas. Cada plato se ajusta una sola vez. */
-function ajustarPlatosAlHogar() {
-  const hg = L.hogar(data); if (!hg.length) return;
-  const factor = (m) => 1 + hg.filter((p) => p.comidas.includes(m)).reduce((a, p) => a + p.f, 0);
-  const cand = new Map();   // nombre -> { t, items, dias }
-  const ver = (pl) => { if (!pl || pl.libre || pl.ajustado || !(pl.items || []).length) return false; const c = cand.get(pl.t) || { t: pl.t, items: pl.items, usos: 0 }; c.usos++; cand.set(pl.t, c); return true; };
-  data.menu.semanas.forEach((w) => w.forEach((d) => { ver(d.comida); ver(d.cena); })); data.platosPropios.forEach((pl) => ver(pl));
-  if (!cand.size) { sheet({ title: 'Ajustar platos', cancel: 'Cerrar', body: [h('p', { id: 'ajuste-nada' }, 'Todos tus platos ya están ajustados: llevan solo tus cantidades.'), h('p', { class: 'mute small' }, 'Los platos nuevos que crees o edites ya cuentan como tuyos.')] }); return; }
-  const lista = [...cand.values()].sort((x, y) => x.t.localeCompare(y.t, 'es')), marcados = new Set(), caja = h('div', { class: 'group cocinar ajuste', id: 'ajuste-lista' });
-  const pintar = () => caja.replaceChildren(...lista.map((c) => { const on = marcados.has(c.t); return h('button', { type: 'button', class: 'item', 'aria-pressed': String(on), onclick: () => { on ? marcados.delete(c.t) : marcados.add(c.t); pintar(); } },
-    h('span', { class: 'box', 'aria-hidden': 'true', 'aria-pressed': String(on) }, icon('check')), h('span', { class: 'nm' }, h('span', { class: 'nm-t' }, c.t), h('small', { class: 'reparto' }, itemsText(c.items))), h('span', { class: 'q' }, '')); }));
-  pintar();
-  sheet({ title: 'Ajustar platos', save: 'Aplicar', body: [h('p', { class: 'mute small' }, 'Marca los platos cuyas cantidades son de todos: se repartirán y quedará solo la tuya. Los que no marques se quedan como están y se dan por ya tuyos. Después ya no vuelven a salir aquí.'), h('div', { class: 'row', style: 'padding:0;min-height:0' }, h('button', { class: 'btn plain', id: 'ajuste-todos', style: 'padding-left:0', onclick: () => { lista.forEach((c) => marcados.add(c.t)); pintar(); } }, 'Marcar todos'), h('button', { class: 'btn plain', id: 'ajuste-ninguno', onclick: () => { marcados.clear(); pintar(); } }, 'Ninguno')), caja],
-    onSave: () => {
-      const antes = { menu: clone(data.menu), platos: clone(data.platosPropios) };
-      const adj = (pl, m) => { if (!pl || pl.libre || pl.ajustado || !cand.has(pl.t)) return;
-        if (marcados.has(pl.t)) pl.items = (pl.items || []).map(([id, q]) => { const x = q / factor(m), ud = L.ing(data, id).u === 'ud'; return [id, ud ? (x >= 1.5 ? Math.round(x) : Math.max(0.5, Math.round(x * 2) / 2)) : Math.round(x)]; });
-        pl.ajustado = true; };
-      data.menu.semanas.forEach((w) => w.forEach((d) => { adj(d.comida, 'comida'); adj(d.cena, 'cena'); })); data.platosPropios.forEach((pl) => adj(pl, 'comida'));
-      commit(); toast(marcados.size ? `${marcados.size} ${marcados.size === 1 ? 'plato ajustado' : 'platos ajustados'}.` : 'Platos marcados como ya tuyos.', () => { data.menu = antes.menu; data.platosPropios = antes.platos; commit(); });
-    } });
-}
 /* Platos propios: se arman con ingredientes y quedan guardados para usarlos en cualquier comida. */
 function borrarPlato(x) {
   confirmSheet('¿Borrar este plato?', `“${x.t}” dejará de salir en la lista. Los días del menú que ya lo usan no cambian.`, 'Borrar', () => { data.platosPropios = data.platosPropios.filter((y) => y.t !== x.t); commit(); sheets.slice().forEach((z) => z.close()); toast('Plato borrado.'); });
 }
 function crearPlato(onListo, existente = null) {
   const w = existente ? clone(existente) : { t: '', items: [] }, nombre = h('input', { type: 'text', id: 'nuevo-plato-nombre', value: w0(existente), placeholder: 'Ej. Bowl de pollo y arroz' }), total = h('div', { class: 'macros-live num', id: 'nuevo-plato-total', 'aria-live': 'polite' });
-  const pintar = () => { total.textContent = 'Para ti: ' + macroTxt(L.sumaItems(data, w.items)); }, edit = itemsEditor(w.items, pintar); pintar();
-  sheet({ title: existente ? 'Editar plato' : 'Nuevo plato', save: existente ? 'Guardar' : 'Guardar plato', body: [field('Nombre del plato', nombre), h('div', { class: 'label' }, 'Tus cantidades'), edit, total, h('p', { class: 'mute small' }, 'Quedará guardado para elegirlo en cualquier comida.')],
+  const pintar = () => { total.textContent = (L.hogar(data).length ? 'Plato completo: ' : 'Para ti: ') + macroTxt(L.sumaItems(data, w.items)); }, edit = itemsEditor(w.items, pintar); pintar();
+  sheet({ title: existente ? 'Editar plato' : 'Nuevo plato', save: existente ? 'Guardar' : 'Guardar plato', body: [field('Nombre del plato', nombre), h('div', { class: 'label' }, (L.hogar(data).length ? 'Cantidades del plato (para todos)' : 'Tus cantidades')), edit, total, h('p', { class: 'mute small' }, 'Quedará guardado para elegirlo en cualquier comida.')],
     onSave: () => {
       const t = nombre.value.trim(); if (!t) return 'Escribe el nombre del plato.';
       const items = w.items.filter((it) => it[1] > 0 && data.ingredientes[it[0]]); if (!items.length) return 'Añade al menos un ingrediente con su cantidad.';
       const antes = existente ? data.platosPropios.findIndex((x) => x.t === existente.t) : -1, otro = data.platosPropios.findIndex((x, k) => x.t === t && k !== antes);
       if (otro >= 0) return 'Ya tienes un plato con ese nombre.';
-      const pl = { t, items: clone(items), ajustado: true }; if (antes >= 0) data.platosPropios[antes] = pl; else data.platosPropios.push(pl);
+      const pl = { t, items: clone(items) }; if (antes >= 0) data.platosPropios[antes] = pl; else data.platosPropios.push(pl);
       commit(); onListo && onListo(pl);
     },
     extra: existente ? h('button', { class: 'btn danger', id: 'plato-borrar', onclick: () => borrarPlato(existente) }, 'Borrar plato') : null });
@@ -407,7 +385,7 @@ function editPlato(semana, i, m) {
   if (w.libre) w.t = '';
   const cuerpo = h('div', { class: 'stack', style: 'gap:14px' });
   const total = h('div', { class: 'macros-live num', id: 'plato-total', 'aria-live': 'polite' });
-  const pintarTotal = () => { total.textContent = 'Para ti: ' + macroTxt(L.sumaItems(data, w.items)); };
+  const pintarTotal = () => { const mio = L.sumaItems(data, w.items, m), todo = L.sumaItems(data, w.items); total.textContent = 'Para ti: ' + macroTxt(mio) + (L.comensales(data, m).length ? ` · el plato completo suma ${L.miles(todo.k)} kcal` : ''); };
   const edit = itemsEditor(w.items, pintarTotal);
   const nombreEl = h('div', { class: 'plato-fijo', id: 'plato-nombre' }), btnElegir = h('button', { type: 'button', class: 'btn sec', id: 'plato-elegir', onclick: () => elegirPlato({ m, actual: w.t, onPick: (pl) => { w.t = pl.t; w.items.splice(0, w.items.length, ...clone(pl.items)); edit.redraw(); pintarTotal(); draw(); } }) });
   const pintarNombre = () => { nombreEl.textContent = w.t || 'Ningún plato elegido'; nombreEl.classList.toggle('vacio', !w.t); btnElegir.textContent = w.t ? 'Cambiar plato' : 'Elegir plato'; };
@@ -424,14 +402,14 @@ function editPlato(semana, i, m) {
   function draw() {
     pintarNombre(); cuerpo.replaceChildren(...[
       !esFija ? h('div', { class: 'row', style: 'padding:0;min-height:0' }, h('div', { class: 'grow' }, 'Comida libre', h('div', { class: 'sub' }, 'Sin ingredientes: cuenta con tus calorías de comida libre.')), swt(w.libre, () => { w.libre = !w.libre; draw(); }, 'Comida libre')) : null,
-      ...(w.libre ? [] : [h('div', { class: 'field' }, h('span', {}, 'Plato'), h('div', { class: 'plato-sel' }, nombreEl, btnElegir)), ...(w.t ? [h('div', { class: 'label' }, 'Tus cantidades'), edit, total] : [])]), repetir].filter(Boolean));
+      ...(w.libre ? [] : [h('div', { class: 'field' }, h('span', {}, 'Plato'), h('div', { class: 'plato-sel' }, nombreEl, btnElegir)), ...(w.t ? [h('div', { class: 'label' }, (L.hogar(data).length ? 'Cantidades del plato (para todos)' : 'Tus cantidades')), edit, total] : [])]), repetir].filter(Boolean));
   }
   pintarRep(); draw(); pintarTotal();
   sheet({ title: `${L.DIAS[i]} · ${NOMBRE_COMIDA[m]}`, body: cuerpo,
     onSave: () => {
       let plato;
       if (w.libre && !esFija) plato = { t: 'Comida libre', libre: true, items: [] };
-      else { const t = w.t.trim(); if (!t) return 'Elige un plato.'; plato = { t, items: w.items.filter((it) => it[1] > 0 && data.ingredientes[it[0]]), ...(L.hogar(data).length ? { ajustado: true } : {}) }; }
+      else { const t = w.t.trim(); if (!t) return 'Elige un plato.'; plato = { t, items: w.items.filter((it) => it[1] > 0 && data.ingredientes[it[0]]) }; }
       rep.forEach((j) => { semana[j][m] = clone(plato); }); commit();
       if (rep.size > 1) toast(`Guardado en ${rep.size} días.`);
     },
@@ -592,7 +570,7 @@ function cocinar(d, k) {
   const pl = L.platoDelDia(data, d, k); if (!pl || pl.libre) return;
   const quien = L.hogar(data).filter((x) => x.comidas.includes(k)).map((x) => x.n), marcados = new Set(), lista = h('div', { class: 'group cocinar', id: 'cocinar-lista' });
   const pintar = () => lista.replaceChildren(...pl.items.map(([id, q], i) => {
-    const rep = L.repartoHogar(data, id, q, k), tot = rep.reduce((a, x) => a + x.q, 0), on = marcados.has(i);
+    const rep = L.repartoHogar(data, id, q, k), tot = q, on = marcados.has(i);
     return h('button', { type: 'button', class: 'item', 'aria-pressed': String(on), onclick: () => { on ? marcados.delete(i) : marcados.add(i); pintar(); } },
       h('span', { class: 'box', 'aria-hidden': 'true', 'aria-pressed': String(on) }, icon('check')),
       h('span', { class: 'nm' }, h('span', { class: 'nm-t' }, L.ing(data, id).n), rep.length > 1 ? h('small', { class: 'reparto' }, rep.map((x) => `${x.n} ${L.cantidadCompra(data, id, x.q)}`).join(' · ')) : null),
@@ -600,7 +578,7 @@ function cocinar(d, k) {
   }));
   pintar();
   sheet({ title: 'Para cocinar', cancel: 'Cerrar', body: [h('div', {}, h('div', { class: 'label' }, `${NOMBRE_COMIDA[k]} · para ${[ 'ti', ...quien ].join(' y ')}`), h('h2', { class: 'grande-titulo', id: 'cocinar-titulo', style: 'font-size:24px' }, pl.t)),
-    lista, h('p', { class: 'mute small' }, 'Cantidades totales para cocinar y, debajo de cada una, lo que le toca a cada persona. Toca un ingrediente para ir marcándolo.')] });
+    lista, h('p', { class: 'mute small' }, 'Las cantidades del plato, tal cual, y debajo de cada una lo que le toca a cada persona. Toca un ingrediente para ir marcándolo.')] });
 }
 /* Ajustar lo que comes hoy: otro plato y/o otras cantidades, solo para hoy (el plan no se toca). */
 const PORCIONES = [[0.5, '½'], [0.75, '¾'], [1, '1×'], [1.25, '1¼'], [1.5, '1½'], [2, '2×']];
@@ -609,7 +587,7 @@ function cambiarComidaHoy(f, d, k) {
   const w = clone({ t: actual.libre ? 'Comida libre' : actual.t, items: actual.items || [], libre: !!actual.libre });
   let origen = clone(w.items), factor = cambiado ? null : 1;
   const cuerpo = h('div', { class: 'stack', style: 'gap:14px' }), total = h('div', { class: 'macros-live num', id: 'hoy-total', 'aria-live': 'polite' }), chips = h('div', { class: 'chips', id: 'hoy-porciones', role: 'group', 'aria-label': 'Porción' });
-  const pintarTotal = () => { total.textContent = w.libre ? `Comida libre: cuenta unas ${L.miles(data.perfil.libre.kcal)} kcal` : 'Hoy, para ti: ' + macroTxt(L.sumaItems(data, w.items)); };
+  const pintarTotal = () => { total.textContent = w.libre ? `Comida libre: cuenta unas ${L.miles(data.perfil.libre.kcal)} kcal` : 'Hoy, para ti: ' + macroTxt(L.sumaItems(data, w.items, k)) + (L.comensales(data, k).length ? ` · plato completo ${L.miles(L.sumaItems(data, w.items).k)} kcal` : ''); };
   const pintarChips = () => chips.replaceChildren(...PORCIONES.map(([v, t]) => h('button', { type: 'button', class: 'chipopt', id: 'porcion-' + v, 'aria-pressed': String(factor === v), onclick: () => {
     factor = v; w.items.splice(0, w.items.length, ...origen.map(([id, q]) => [id, L.ing(data, id).u === 'ud' ? Math.round(q * v * 2) / 2 : Math.round(q * v)])); edit.redraw(); pintarChips(); pintarTotal(); } }, t)));
   const edit = itemsEditor(w.items, () => { factor = null; pintarChips(); pintarTotal(); });
@@ -619,7 +597,7 @@ function cambiarComidaHoy(f, d, k) {
   function draw() {
     nombreEl.textContent = w.t; pintarChips(); pintarTotal();
     cuerpo.replaceChildren(...[h('div', { class: 'field' }, h('span', {}, 'Plato'), h('div', { class: 'plato-sel' }, nombreEl, btn)),
-      ...(w.libre ? [total] : [h('div', { class: 'field' }, h('span', {}, 'Porción'), chips), h('div', { class: 'label' }, 'Tus cantidades de hoy'), edit, total]),
+      ...(w.libre ? [total] : [h('div', { class: 'field' }, h('span', {}, 'Porción'), chips), h('div', { class: 'label' }, (L.hogar(data).length ? 'Cantidades de hoy (para todos)' : 'Tus cantidades de hoy')), edit, total]),
       h('p', { class: 'mute small' }, 'Los cambios valen solo para hoy: el menú no se modifica.')]);
   }
   draw();
@@ -795,14 +773,14 @@ function viewHoy() {
 }
 
 function platoBtn(semana, i, m) {
-  const pl = semana[i][m], s = pl && !pl.libre ? L.sumaItems(data, pl.items) : null;
+  const pl = semana[i][m], s = pl && !pl.libre ? L.sumaItems(data, pl.items, m) : null;
   return h('button', { class: 'plato meal', id: `plato-${m}-${i}`, onclick: () => editPlato(semana, i, m) },
     h('div', { class: 'mb' }, h('span', { class: 'label' }, NOMBRE_COMIDA[m]),
       pl ? [h('h3', {}, pl.libre ? 'Comida libre' : pl.t), pl.libre ? null : h('p', { class: 'det' }, itemsText(pl.items))] : h('h3', { class: 'add' }, '+ Añadir')),
     pl ? h('span', { class: 'kc num' }, pl.libre ? `~${L.miles(data.perfil.libre.kcal)} kcal` : h('span', {}, `${L.miles(s.k)} kcal`, h('small', {}, `P ${f1(s.p)} g`))) : null);
 }
 function fijaBtn(semana, i, c, d) {
-  const f = L.fijoDia(data, d, c), kc = L.sumaItems(data, f.items).k;
+  const f = L.fijoDia(data, d, c), kc = L.sumaItems(data, f.items, c).k;
   return h('button', { class: 'mini meal' + (f.propio ? ' propio' : ''), id: `fija-${c}-${i}`, onclick: () => editPlato(semana, i, c) },
     h('div', { class: 'mb' }, h('span', { class: 'label' }, NOMBRE_COMIDA[c]), h('span', { class: 'mt' }, f.texto || '—')),
     h('span', { class: 'mk num' }, f.items.length ? `${L.miles(kc)} kcal` : 'Sin ingredientes'));
@@ -818,7 +796,7 @@ function viewSemana() {
       h('div', { class: 'metric' }, h('span', { class: 'label' }, 'Media diaria'), h('b', { class: 'num', id: 'media-kcal' }, `${L.miles(media.k)} kcal`)),
       h('div', { class: 'metric' }, h('span', { class: 'label' }, 'Proteína media'), h('b', { class: 'num', id: 'media-prot' }, `${L.miles(media.p)} g`)),
       h('div', { class: 'metric' }, h('span', { class: 'label' }, 'Objetivo medio'), h('b', { class: 'num' }, `${L.miles(dias.reduce((a, x) => a + x.o.kcal, 0) / 7)} kcal`))) : null,
-    h('p', { class: 'mute small' }, 'Toca un plato para editarlo y, si quieres, repetirlo en otros días. Las cantidades son las tuyas.'),
+    h('p', { class: 'mute small' }, (L.hogar(data).length ? 'Toca un plato para editarlo y, si quieres, repetirlo en otros días. Las cantidades son las del plato completo; las calorías que ves son solo las tuyas.' : 'Toca un plato para editarlo y, si quieres, repetirlo en otros días. Las cantidades son por persona.')),
     h('div', { class: 'group' }, dias.map(({ d, i, t, o }) => {
       const pct = t && o.kcal ? Math.min(100, t.k / o.kcal * 100) : 0, pasa = t && o.kcal && t.k > o.kcal * 1.05;
       return h('div', { class: 'dayrow' + (L.iso(d) === fh ? ' hoy' : '') }, h('div', { class: 'dn' }, L.DIAS[i], h('small', {}, L.fechaCorta(d) + (L.esDiaGym(data, d) ? ' · con entreno' : '')),
@@ -899,12 +877,11 @@ function viewAjustes() {
       grupo('Comida libre', rowOf('Calorías', numField(p.libre.kcal, (v) => { p.libre.kcal = v; commit(); }), 'Lo que cuentas cuando comes fuera del plan.'), rowOf('Proteína (g)', numField(p.libre.prot, (v) => { p.libre.prot = v; commit(); }))));
     case 'hogar': {
       const hg = L.hogar(data), nombresComidas = (cs) => (cs.length === 5 ? 'todas las comidas' : cs.length ? L.COMIDAS_HOGAR.filter(([k]) => cs.includes(k)).map(([, t]) => t.toLowerCase()).join(', ') : 'ninguna comida');
-      return subpagina('Con quién comes', 'Tus platos llevan solo tus cantidades. Aquí dices quién más come contigo y cuánto.',
+      return subpagina('Con quién comes', 'Tus platos llevan las cantidades de todos los que comen. Aquí dices quién más come contigo y cuánto.',
         hg.length ? h('div', { class: 'group', id: 'hogar-lista' }, hg.map((x, i) => deslizable(tapRow(x.n, `${Math.round(x.f * 100)} % de tu ración · ${nombresComidas(x.comidas)}`, () => editarPersona(x)), () => sacar(data.perfil.hogar, i, x.n, commit))))
           : h('p', { class: 'mute small', id: 'hogar-vacio', style: 'padding-left:4px' }, 'Ahora comes solo. Si compartes alguna comida con alguien, añádelo y la lista de la compra se ajusta sola.'),
-        h('div', { class: 'row', style: 'padding:0;gap:10px;flex-wrap:wrap' }, h('button', { class: 'btn', id: 'hogar-anadir', onclick: () => editarPersona(null) }, 'Añadir persona'),
-          hg.length ? h('button', { class: 'btn sec', id: 'hogar-ajustar', onclick: ajustarPlatosAlHogar }, 'Ajustar mis platos') : null),
-        h('p', { class: 'mute small' }, 'La lista de la compra suma la ración de cada persona en las comidas que compartís. Tus calorías salen siempre solo de tus cantidades. Lo que va por unidades (fajitas, huevos…) se redondea hacia arriba.'));
+        h('div', { class: 'row', style: 'padding:0;gap:10px;flex-wrap:wrap' }, h('button', { class: 'btn', id: 'hogar-anadir', onclick: () => editarPersona(null) }, 'Añadir persona'),),
+        h('p', { class: 'mute small' }, 'Las cantidades de cada plato son las de todos: lo que cocinas y compras, tal cual. Tus calorías y macros se calculan solo con tu parte. Lo que va por unidades (fajitas, huevos…) se reparte en piezas enteras.'));
     }
     case 'platos': {
       const ps = data.platosPropios.slice().sort((x, y) => x.t.localeCompare(y.t, 'es')), delMenu = platosGuardados('comida').concat(platosGuardados('cena')).filter((x, k, a) => !data.platosPropios.some((p) => p.t === x.t) && a.findIndex((y) => y.t === x.t) === k);

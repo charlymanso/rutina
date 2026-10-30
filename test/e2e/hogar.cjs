@@ -9,61 +9,47 @@ const gramos = (t) => { const m = String(t).replace(/\./g, '').match(/([\d,]+)\s
   const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message));
   await p.addInitScript(() => { window.rutina = { platform: 'win32', load: async () => { try { return JSON.parse(localStorage.getItem('stub')); } catch { return null; } }, save: async (x) => { if (localStorage.getItem('congelar')) return; localStorage.setItem('stub', JSON.stringify(x)); }, version: async () => '0' }; });
   await p.goto(BASE + '/index.html'); await p.waitForSelector('.sheet'); await p.fill('input[placeholder="Tu nombre"]', 'Ana'); await p.click('text=Empezar con un plan de ejemplo'); await p.waitForSelector('h1.title');
-  await p.click('nav >> text=Compra'); await p.waitForSelector('#add-compra');
+  const kcalMenu = async () => { await p.click('nav >> text=Menú'); await p.waitForSelector('#media-kcal'); return parseInt((await p.textContent('#media-kcal')).replace(/\./g, ''), 10); };
+  const polloCompra = async () => { await p.click('nav >> text=Compra'); await p.waitForSelector('#add-compra'); return gramos(await p.locator('.shop .item:has-text("Pechuga de pollo") .q').textContent()); };
+  const k0 = await kcalMenu(), pollo0 = await polloCompra();
   ok(await p.locator('#compra-hogar').count() === 0 && await p.locator('.stepper').count() === 0, 'Quien come solo: Compra no muestra nada de personas');
-  const pollo0 = gramos(await p.locator('.shop .item:has-text("Pechuga de pollo") .q').textContent());
-  await p.click('nav >> text=Ajustes'); ok(await p.locator('#aj-hogar').count() === 0, 'Quien come solo: no sale "Con quién comes"'); ok(!(await p.textContent('body')).includes('Con quién comes'), 'Y no se menciona en ningún sitio de Ajustes');
-  await p.click('#aj-perfil'); ok((await p.textContent('#personas-n')) === '1' && await p.locator('#personas-menos').count() === 1, 'En Perfil: "Personas en casa" = 1');
+  await p.click('nav >> text=Ajustes'); ok(await p.locator('#aj-hogar').count() === 0 && !(await p.textContent('body')).includes('Con quién comes'), 'Quien come solo: no sale "Con quién comes" en ningún sitio');
+  await p.click('#aj-perfil'); ok((await p.textContent('#personas-n')) === '1', 'En Perfil: "Personas en casa" = 1');
   await p.click('#personas-mas'); ok((await p.textContent('#personas-n')) === '2', 'Al subir a 2 personas...'); await p.click('#aj-atras');
   ok(await p.locator('#aj-hogar').count() === 1 && (await p.textContent('#aj-hogar')).includes('Tú y Persona 2'), '...aparece "Con quién comes" en Ajustes');
   await p.click('#aj-hogar'); ok((await p.textContent('#hogar-lista')).includes('70 %') && (await p.textContent('#hogar-lista')).includes('comida, cena'), 'La persona nueva entra al 70 % con comida y cena');
   await p.locator('#hogar-lista .row').first().click(); await p.waitForSelector('#hogar-nombre');
   ok((await p.textContent('#hogar-pct')) === '70 %' && (await p.getAttribute('#hogar-c-desayuno', 'aria-pressed')) === 'false', 'Por defecto: 70 % y solo comida y cena');
   await p.fill('#hogar-nombre', ''); await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); ok((await p.locator('.sheet').last().textContent()).includes('Escribe un nombre'), 'Pide nombre');
-  await p.fill('#hogar-nombre', 'Marta'); await p.click('#hogar-mas'); await p.click('#hogar-menos'); await p.click('#hogar-menos'); ok((await p.textContent('#hogar-pct')) === '65 %' && (await p.textContent('#hogar-ejemplo')).includes('130 g'), 'El porcentaje se ajusta de 5 en 5 con un ejemplo: ' + (await p.textContent('#hogar-ejemplo')).slice(0, 40));
+  await p.fill('#hogar-nombre', 'Marta'); await p.click('#hogar-mas'); await p.click('#hogar-menos'); await p.click('#hogar-menos'); ok((await p.textContent('#hogar-pct')) === '65 %', 'El porcentaje se ajusta de 5 en 5');
+  ok((await p.textContent('#hogar-ejemplo')).includes('340 g') && (await p.textContent('#hogar-ejemplo')).includes('206 g') && (await p.textContent('#hogar-ejemplo')).includes('134 g'), 'Con un ejemplo del plato completo: ' + (await p.textContent('#hogar-ejemplo')).slice(0, 80));
   await p.click('#hogar-mas'); await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(300);
-  ok((await p.textContent('#hogar-lista')).includes('Marta') && (await p.textContent('#hogar-lista')).includes('70 %'), 'Queda en la lista: ' + (await p.textContent('#hogar-lista')).replace(/\s+/g, ' ').slice(0, 70));
+  ok((await p.textContent('#hogar-lista')).includes('Marta') && (await p.textContent('#hogar-lista')).includes('70 %'), 'Queda en la lista');
   await p.click('#aj-atras'); ok((await p.textContent('#aj-hogar')).includes('Tú y Marta'), 'El resumen dice "Tú y Marta"');
-  await p.click('nav >> text=Compra'); await p.waitForSelector('#compra-hogar'); ok((await p.textContent('#compra-hogar')).includes('Para ti y Marta'), 'Compra: "Para ti y Marta"');
-  const pollo1 = gramos(await p.locator('.shop .item:has-text("Pechuga de pollo") .q').textContent());
-  ok(+pollo1 > +pollo0 && +pollo1 < +pollo0 * 1.75, `El pollo sube (${pollo0} → ${pollo1} g) pero menos del doble, porque Marta no come el desayuno y come menos`);
-  // tus calorías no cambian
-  await p.click('nav >> text=Menú'); const k1 = await p.textContent('#media-kcal'); await p.click('nav >> text=Ajustes'); await p.click('#aj-hogar'); await p.locator('#hogar-lista .row').first().click(); await p.waitForSelector('#hogar-nombre'); await p.click('#hogar-c-desayuno'); await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(250);
-  await p.click('nav >> text=Menú'); ok((await p.textContent('#media-kcal')) === k1, 'Tus calorías en el Menú no cambian al cambiar con quién comes');
-  // la nueva comida compartida (desayuno) sube la compra
-  await p.click('nav >> text=Compra'); const pollo2 = gramos(await p.locator('.shop .item:has-text("Pechuga de pollo") .q').textContent()); ok(+pollo2 >= +pollo1, 'Compartir también el desayuno sube (o mantiene) la compra');
-  // quitar: deslizar o con deshacer
-  await p.click('nav >> text=Ajustes'); await p.click('#aj-hogar'); await p.locator('#hogar-lista .row').first().click(); await p.waitForSelector('#hogar-nombre'); await p.keyboard.press('Escape');
+  // los platos llevan las cantidades de todos: la compra no cambia, tus calorías sí (solo tu parte)
+  const pollo1 = await polloCompra(); ok(pollo1 === pollo0, `La compra son las cantidades del plato, tal cual (${pollo0} g antes y ${pollo1} g después)`);
+  ok((await p.textContent('#compra-hogar')).includes('Para ti y Marta'), 'Compra: "Para ti y Marta"');
+  const k1 = await kcalMenu(); ok(k1 < k0 && k1 > k0 * 0.5, `Tus calorías bajan a tu parte (${k0} → ${k1} kcal de media)`);
+  // en el editor de un plato se ve la diferencia
+  await p.click('#plato-comida-0'); await p.waitForSelector('#plato-total'); ok((await p.textContent('#plato-total')).includes('Para ti') && (await p.textContent('#plato-total')).includes('el plato completo suma'), 'El editor del plato dice "Para ti" y cuánto suma el plato completo: ' + (await p.textContent('#plato-total')).slice(0, 80)); ok((await p.textContent('.sheet')).includes('Cantidades del plato (para todos)'), 'Y que las cantidades son para todos'); await p.keyboard.press('Escape');
+  // compartir también el desayuno baja todavía más tus calorías
+  await p.click('nav >> text=Ajustes'); await p.click('#aj-hogar'); await p.locator('#hogar-lista .row').first().click(); await p.waitForSelector('#hogar-nombre'); await p.click('#hogar-c-desayuno'); await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(250);
+  const k2 = await kcalMenu(); ok(k2 < k1, `Compartir también el desayuno baja tus calorías (${k1} → ${k2})`); ok((await polloCompra()) === pollo0, 'y la compra sigue igual');
+  // quitar: deslizar, con deshacer
+  await p.click('nav >> text=Ajustes'); await p.click('#aj-hogar');
   const box = await p.locator('#hogar-lista .swipe').first().boundingBox(), c = await p.context().newCDPSession(p), x = box.x + box.width - 20, y = box.y + box.height / 2;
   await c.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }); for (let i = 1; i <= 8; i++) await c.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x - 300 * i / 8, y }] }); await c.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await p.waitForTimeout(500);
   ok(await p.locator('#hogar-vacio').count() === 1, 'Deslizando se quita la persona'); await p.click('.toast-undo'); await p.waitForTimeout(250); ok((await p.textContent('#hogar-lista')).includes('Marta'), 'Y se puede deshacer');
-  // ajustar los platos que ya llevaban las cantidades de los dos: se elige cuáles y cada plato se ajusta una sola vez
-  const polloMenu = async () => gramos((await p.textContent('#plato-comida-0')).match(/Pechuga de pollo ([\d,.]+) g/)[1] + ' g');
-  await p.click('nav >> text=Menú'); const g0 = await polloMenu();
-  const abrirAjuste = async () => { await p.click('nav >> text=Ajustes'); await p.click('#aj-hogar'); await p.click('#hogar-ajustar'); await p.waitForSelector('#ajuste-lista, #ajuste-nada'); };
-  const aplicar = async () => { await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(300); };
-  // un plato que creas tú ya cuenta como tuyo y no sale en la lista
-  await p.click('nav >> text=Ajustes'); await p.click('#aj-platos'); await p.click('#plato-nuevo'); await p.fill('#nuevo-plato-nombre', 'Plato nuevo'); await p.locator('.sheet').last().locator('#anadir-alimento').click(); await p.fill('#buscar-alimento', 'arroz'); await p.click('.res >> nth=0'); await p.waitForTimeout(200); await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(300);
-  await abrirAjuste(); ok(await p.locator('#ajuste-lista .item:has-text("Plato nuevo")').count() === 0 && await p.locator('#ajuste-lista .item').count() > 3, 'Un plato que creas tú no sale para ajustar, y los de antes sí: '); await p.keyboard.press('Escape');
-  await abrirAjuste(); const fila = p.locator('#ajuste-lista .item:has-text("Pollo con arroz y brócoli")');
-  ok(await fila.count() === 1 && (await fila.getAttribute('aria-pressed')) === 'false', 'Lista los platos sin ajustar, todos sin marcar por defecto (nada se divide sin que lo pidas)');
-  await fila.click(); await aplicar(); await p.click('nav >> text=Menú'); const g1 = await polloMenu();
-  ok(Math.abs(g1 - g0 / 1.7) < 1.1, `Ajustar el plato marcado: ${g0} g pasa a ${g1} g (tuya = total ÷ 1,7)`);
-  await p.click('.toast-undo'); await p.waitForTimeout(250); ok((await polloMenu()) === g0, 'Se puede deshacer');
-  await abrirAjuste(); await p.click('#ajuste-lista .item:has-text("Pollo con arroz y brócoli")'); await aplicar(); await p.click('nav >> text=Menú'); ok(Math.abs((await polloMenu()) - g1) < 1.1, 'Aplicado otra vez tras deshacer');
-  await abrirAjuste(); ok(await p.locator('#ajuste-nada').count() === 1, 'Al volver a abrirlo no sale nada: los platos listados quedaron ajustados o marcados como ya tuyos (no se reduce dos veces)'); await p.keyboard.press('Escape');
-  // un título largo nunca empuja fuera el botón de guardar, tampoco en pantallas estrechas
-  await p.setViewportSize({ width: 340, height: 700 }); await p.click('nav >> text=Ajustes'); await p.click('#aj-hogar'); await p.locator('#hogar-lista .row').first().click(); await p.waitForSelector('#hogar-nombre');
+  // un título muy largo nunca empuja fuera el botón de guardar, tampoco en pantallas estrechas
+  await p.setViewportSize({ width: 340, height: 700 }); await p.locator('#hogar-lista .row').first().click(); await p.waitForSelector('#hogar-nombre');
   await p.fill('#hogar-nombre', 'Una persona con un nombre muy pero que muy largo'); await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(300);
   await p.locator('#hogar-lista .row').first().click(); await p.waitForSelector('#hogar-nombre'); await p.waitForTimeout(300);
   const alcance = await p.evaluate(() => { const b = [...document.querySelectorAll('.sheet header .btn')].filter((x) => !x.classList.contains('plain')).pop(), r = b.getBoundingClientRect(), e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { dentro: r.left >= 0 && r.right <= innerWidth, encima: !!(e && b.contains(e)), txt: b.textContent }; });
   ok(alcance.dentro && alcance.encima && alcance.txt === 'Guardar', 'Con un título muy largo, el botón "Guardar" se ve y se puede pulsar en una pantalla de 340 px'); await p.keyboard.press('Escape'); await p.setViewportSize({ width: 390, height: 844 });
-  // datos viejos: "personas en casa = 2" -> todo para dos, igual que antes
-  const inyectar = async (fn) => { await p.evaluate(fn); await p.reload(); await p.waitForSelector('h1.title'); await p.evaluate(() => localStorage.removeItem('congelar')); await p.click('nav >> text=Compra'); await p.waitForSelector('#add-compra'); };
-  await inyectar(() => { const d = JSON.parse(localStorage.getItem('stub')); d.perfil.hogar = []; localStorage.setItem('congelar', '1'); localStorage.setItem('stub', JSON.stringify(d)); });
-  const polloSolo = gramos(await p.locator('.shop .item:has-text("Pechuga de pollo") .q').textContent());
-  await inyectar(() => { const d = JSON.parse(localStorage.getItem('stub')); delete d.perfil.hogar; d.perfil.personas = 2; localStorage.setItem('congelar', '1'); localStorage.setItem('stub', JSON.stringify(d)); });
-  const polloV = gramos(await p.locator('.shop .item:has-text("Pechuga de pollo") .q').textContent()); ok(Math.abs(polloV - 2 * polloSolo) <= 3 && (await p.textContent('#compra-hogar')).includes('Persona 2'), `Datos viejos (2 personas): sigue saliendo el doble (${polloSolo} g → ${polloV} g) y aparece "Persona 2" para ajustarla`);
+  // datos viejos: "personas en casa = 2" -> aparece "Persona 2" para ajustarla; la compra no se duplica
+  await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('stub')); delete d.perfil.hogar; d.perfil.personas = 2; localStorage.setItem('congelar', '1'); localStorage.setItem('stub', JSON.stringify(d)); });
+  await p.reload(); await p.waitForSelector('h1.title'); await p.evaluate(() => localStorage.removeItem('congelar'));
+  const polloV = await polloCompra(); ok(polloV === pollo0 && (await p.textContent('#compra-hogar')).includes('Persona 2'), `Datos viejos (2 personas): aparece "Persona 2" y la compra sigue siendo la del plato (${polloV} g)`);
   ok(errs.length === 0, 'Sin errores JS ' + errs.join('|'));
   await p.screenshot({ path: SHOTS + '/hogar.png' }); await b.close();
 })();

@@ -8,7 +8,7 @@ Tu día en un solo sitio: menú semanal con calorías y proteína, lista de la c
 - **Hoy:** las comidas del día con su check, nutrición que se completa según marcas lo comido (en rojo si te pasas de calorías), extras fuera del plan, entreno de hoy.
 - **Menú:** semana a semana (ciclo de 1 o 2 semanas), con desayuno, media mañana, comida, merienda y cena; repetir un plato en varios días; recomendador de menús según tu objetivo.
 - **Platos:** los creas con ingredientes en Ajustes y los eliges en cualquier comida. Hoy puedes cambiar el plato o las cantidades solo por ese día.
-- **Con quién comes:** tus platos llevan solo tus cantidades; en Ajustes añades a quien come contigo, su ración respecto a la tuya y qué comidas compartís, y la compra se ajusta sola (por unidades se redondea hacia arriba). En Hoy, el botón «Para cocinar» muestra las cantidades totales del plato y lo que le toca a cada uno.
+- **Con quién comes:** los platos llevan las cantidades de todos los que comen (lo que cocinas y compras, tal cual); en Ajustes añades a quien come contigo, su ración respecto a la tuya y qué comidas compartís, y tus calorías y macros se calculan solo con tu parte (por unidades, en piezas enteras). En Hoy, «Para cocinar» muestra el plato completo y lo que le toca a cada uno.
 - **Compra:** sale del menú, agrupada por secciones del súper, con extras tuyos (etiqueta «Extra») y «Copiar lista».
 - **Entreno:** sesiones con varios días, pesos recordados, ejercicios añadidos o quitados solo por hoy, y varias sesiones el mismo día (programadas o sumadas en el momento: Brazo, Cardio…) que salen como un solo entreno.
 - **Alimentos:** base incluida, productos de supermercado (Open Food Facts) y lector de códigos de barras con la cámara.
