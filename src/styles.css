@@ -155,7 +155,7 @@ input::placeholder{color:var(--faint)}
 .itemrow{display:grid;grid-template-columns:minmax(0,1fr) 5.5rem 1.6rem auto;gap:8px;align-items:center}
 .itemrow .u{color:var(--muted);font-size:13px}
 .itemrow .x{color:var(--faint);font-size:20px;line-height:1;width:28px;height:28px}
-.exrow{display:grid;grid-template-columns:minmax(0,1fr) 5.5rem auto auto;gap:8px;align-items:center}
+.exrow{display:grid;grid-template-columns:minmax(0,1fr) 4.6rem auto auto auto;gap:6px;align-items:center}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:rgba(40,40,42,.94);color:#fff;padding:10px 18px;border-radius:99px;font-size:14px;z-index:60;max-width:calc(100% - 32px)}
 .hero{display:flex;flex-direction:column;gap:6px;text-align:center;padding:4px 0 8px}
 .hero .big{font-size:28px;font-weight:700;letter-spacing:-.025em}
@@ -419,3 +419,7 @@ b.over,.metric .over{color:var(--red)}
 .cocinar .item .reparto{display:block;color:var(--muted);font-size:12px;margin-top:2px;font-variant-numeric:tabular-nums}
 .ajuste .item[aria-pressed=true] .nm{color:var(--ink);text-decoration:none}
 .ajuste .item[aria-pressed=true] .reparto{text-decoration:none}
+
+.orden{display:inline-flex;flex-direction:column;gap:2px}
+.orden button{border:0;background:var(--fill,rgba(120,120,128,.14));color:var(--muted,#6e6e73);border-radius:6px;width:26px;height:18px;font-size:9px;line-height:1;cursor:pointer;padding:0}
+.orden button:disabled{opacity:.3;cursor:default}

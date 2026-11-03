@@ -317,6 +317,10 @@ function editIngrediente(id, onDone, relleno = {}) {
     } }, 'Borrar') : null });
 }
 
+/* Flechas para cambiar el orden de una lista: mover(j) lleva el elemento i a la posición j. */
+const ordenBtns = (i, n, mover, que) => h('span', { class: 'orden' },
+  h('button', { type: 'button', class: 'ord-sube', 'aria-label': `Subir ${que}`, disabled: i === 0, onclick: () => mover(i - 1) }, '▲'),
+  h('button', { type: 'button', class: 'ord-baja', 'aria-label': `Bajar ${que}`, disabled: i === n - 1, onclick: () => mover(i + 1) }, '▼'));
 const NOMBRE_COMIDA = { desayuno: 'Desayuno', media: 'Media mañana', comida: 'Comida', merienda: 'Merienda', cena: 'Cena' };
 function platosGuardados(m = 'comida') { // platos distintos que ya usas, para reutilizarlos
   const mapa = new Map(), esFija = L.FIJAS.includes(m), claves = esFija ? [m] : ['comida', 'cena'];
@@ -463,7 +467,8 @@ function editSesion(id) {
       h('input', { type: 'text', value: e.n, placeholder: 'Ejercicio', 'aria-label': 'Ejercicio', oninput: (x) => { e.n = x.target.value; } }),
       h('input', { type: 'text', value: e.s, placeholder: '4×8', 'aria-label': 'Series y repeticiones', oninput: (x) => { e.s = x.target.value; } }),
       h('button', { class: 'btn ' + (e.c ? '' : 'sec'), style: 'padding:6px 10px;font-size:13px', title: 'Apuntar kilos', onclick: () => { e.c = !e.c; draw(); } }, e.c ? 'kg ✓' : 'kg'),
-      h('button', { class: 'x', style: 'color:var(--faint);font-size:20px', 'aria-label': 'Quitar', onclick: () => sacar(s.ej, i, e.n || 'Ejercicio', draw) }, '×')), () => sacar(s.ej, i, e.n || 'Ejercicio', draw))),
+      h('button', { class: 'x', style: 'color:var(--faint);font-size:20px', 'aria-label': 'Quitar', onclick: () => sacar(s.ej, i, e.n || 'Ejercicio', draw) }, '×'),
+      s.ej.length > 1 ? ordenBtns(i, s.ej.length, (j) => { s.ej.splice(j, 0, s.ej.splice(i, 1)[0]); draw(); }, 'ejercicio') : null), () => sacar(s.ej, i, e.n || 'Ejercicio', draw))),
       h('button', { class: 'btn sec', style: 'align-self:flex-start', onclick: () => { s.ej.push({ n: '', s: '3×10', c: true }); draw(); } }, '+ Ejercicio'));
   }
   draw(); pintarDias();
@@ -473,9 +478,8 @@ function editSesion(id) {
       let min = '';
       if (durValor.value.trim() !== '') { const n = num(durValor.value, NaN); if (!(n > 0)) return 'Escribe la duración con números, por ejemplo 60 o 1,5.'; if (durUnidad.value === 'min' && n > 600) return 'Son más de 10 horas. Cambia la unidad a horas.'; if (durUnidad.value === 'h' && n > 10) return 'La duración máxima es de 10 horas.'; min = `${L.kgTxt(Math.round(n * 100) / 100)} ${durUnidad.value === 'h' ? 'h' : 'min'}`; }
       const nueva = { id: s.id, dias: [...s.dias].sort(), t: t.value.trim(), min, ej: s.ej.filter((e) => e.n.trim()).map((e) => ({ n: e.n.trim(), s: e.s.trim(), c: !!e.c })) };
-      const otras = data.entreno.sesiones.filter((x) => x.id !== s.id);   // varias sesiones pueden compartir día
-      const primero = (x) => (x.dias.length ? Math.min(...x.dias) : 9);
-      data.entreno.sesiones = [...otras, nueva].sort((a, b) => primero(a) - primero(b)); commit();
+      const i = data.entreno.sesiones.findIndex((x) => x.id === s.id);   // se queda donde la hayas puesto; una nueva va al final
+      if (i >= 0) data.entreno.sesiones[i] = nueva; else data.entreno.sesiones.push(nueva); commit();
     },
     extra: orig ? h('div', { class: 'row', style: 'padding:0;gap:4px' }, h('button', { class: 'btn danger', onclick: () => confirmSheet('¿Borrar sesión?', `Se eliminará “${orig.t}”. Tus kilos anotados se conservan.`, 'Borrar', () => { data.entreno.sesiones = data.entreno.sesiones.filter((x) => x.id !== s.id); commit(); sheets.slice().forEach((x) => x.close()); }) }, 'Borrar'),
       h('button', { class: 'btn plain', onclick: () => { const c = clone(orig); c.id = L.idSesionNueva(data); c.dias = []; c.t = `${orig.t} (copia)`; data.entreno.sesiones.push(c); commit(); sheets.slice().forEach((x) => x.close()); toast('Sesión duplicada. Cámbiale el nombre y los días.'); } }, 'Duplicar')) : null });
@@ -858,8 +862,9 @@ function viewEntreno() {
   return h('div', { class: 'page' },
     h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, 'Entreno'), h('p', { class: 'subtitle' }, ses.length ? `${ses.length} ${ses.length === 1 ? 'sesión' : 'sesiones'} · ${dias} ${dias === 1 ? 'día' : 'días'} a la semana` : 'Aún no has creado sesiones')), h('button', { class: 'btn', id: 'nueva-sesion', onclick: () => editSesion(null) }, 'Nueva sesión')),
     ses.length ? h('div', { class: 'group' }, rowOf('Hora habitual del entreno', h('input', { type: 'time', id: 'hora-entreno', value: data.entreno.hora, style: 'width:7.2rem', onchange: (e) => { data.entreno.hora = e.target.value || data.entreno.hora; commit(); } }))) : null,
-    ses.length ? ses.map((s) => h('section', { class: 'card' },
-      h('div', { class: 'row', style: 'padding:0;min-height:0' }, h('div', { class: 'grow' }, h('div', { class: 'label' }, `${L.diasTexto(s.dias)}${s.min ? ' · ' + s.min : ''}`), h('h2', { class: 'sec' }, s.t)), h('button', { class: 'btn sec', onclick: () => editSesion(s.id) }, 'Editar')),
+    ses.length ? ses.map((s, i) => h('section', { class: 'card', id: 'sesion-' + s.id },
+      h('div', { class: 'row', style: 'padding:0;min-height:0;gap:10px' }, h('div', { class: 'grow' }, h('div', { class: 'label' }, `${L.diasTexto(s.dias)}${s.min ? ' · ' + s.min : ''}`), h('h2', { class: 'sec' }, s.t)),
+        ses.length > 1 ? ordenBtns(i, ses.length, (j) => { ses.splice(j, 0, ses.splice(i, 1)[0]); commit(); }, 'sesión ' + s.t) : null, h('button', { class: 'btn sec', onclick: () => editSesion(s.id) }, 'Editar')),
       h('div', { class: 'group', style: 'box-shadow:none;background:var(--bg)' }, s.ej.map((e) => { const u = e.c ? L.ultimoPeso(data, L.slug(e.n)) : null;
         return h('div', { class: 'row', style: 'min-height:42px' }, h('span', { class: 'grow' }, e.n), h('span', { class: 'mute num small' }, e.s + (u ? ` · ${L.kgTxt(u.kg)} kg` : ''))); })))) :
       h('div', { class: 'card empty' }, h('p', {}, 'Crea tus sesiones de gimnasio y aparecerán en Hoy los días que toquen.'), h('button', { class: 'btn', onclick: () => editSesion(null) }, 'Crear la primera')));
