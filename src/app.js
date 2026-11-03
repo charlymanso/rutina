@@ -494,6 +494,13 @@ function cambiarEntrenoDia(f, modo = 'cambiar') {
     cambiado ? h('button', { class: 'btn plain', id: 'cambiar-volver', style: 'align-self:flex-start;padding-left:0', onclick: () => { delete diaReg(f).entreno; sh.close(); commit(); if (S.entrenoGrande) S.entrenoGrande(); toast('Vuelves a tu plan.'); } }, 'Volver a mi plan') : null] });
 }
 function anadirEntrenoHoy(f) { if (!data.entreno.sesiones.length) return editSesion(null); cambiarEntrenoDia(f, 'anadir'); }
+/* Quitar el entreno de hoy (deslizando en Hoy): hoy es descanso; el plan no se toca y se puede deshacer. */
+function quitarEntrenoHoy(f, d) {
+  const dr = diaReg(f), antes = { entreno: dr.entreno, bloques: dr.bloques, bloquesQuitar: dr.bloquesQuitar };
+  delete dr.bloques; delete dr.bloquesQuitar; if (L.sesionGym(data, L.idxDia(d))) dr.entreno = 'descanso'; else delete dr.entreno;
+  commit();
+  toast('Entreno de hoy quitado.', () => { const r = diaReg(f); for (const k of Object.keys(antes)) { if (antes[k] === undefined) delete r[k]; else r[k] = antes[k]; } commit(); });
+}
 function barraEntreno(d, f) {
   if (L.sesionDelDia(data, d)) return null;   // si hay entreno, se abre y se cambia desde su tarjeta
   return h('div', { class: 'row', style: 'padding:0 4px;min-height:0' }, h('div', { class: 'grow small mute', id: 'entreno-hoy' }, 'Hoy toca descanso'),
@@ -769,7 +776,7 @@ function viewHoy() {
     h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, saludo()), h('p', { class: 'subtitle' }, L.fechaLarga(d)))),
     avisoInstalar(), recordatorioCuenta(),
     h('div', { class: 'cols' },
-      h('div', { class: 'stack' }, slots.length ? h('div', { class: 'group' }, slots.map((s) => slotEl(s, f, sig && sig.k, !!hechos[s.k]))) :
+      h('div', { class: 'stack' }, slots.length ? h('div', { class: 'group' }, slots.map((s) => (s.k === 'gym' ? deslizable(slotEl(s, f, sig && sig.k, !!hechos[s.k]), () => quitarEntrenoHoy(f, d), 'Quitar', 'swipe-slot') : slotEl(s, f, sig && sig.k, !!hechos[s.k])))) :
         h('div', { class: 'card empty' }, h('p', {}, 'Hoy no tienes nada en el plan.'), h('button', { class: 'btn', onclick: () => go('semana') }, 'Preparar el menú')), slots.length ? h('p', { class: 'mute small', style: 'padding:0 4px' }, 'Toca una comida para cambiar el plato o las cantidades de hoy.') : null, barraEntreno(d, f), extrasCard(f)),
       h('div', { class: 'stack' },
         t ? h('section', { class: 'card', id: 'nutricion' }, h('h2', { class: 'sec' }, 'Nutrición'), metric('Proteína', c.p, o.prot, 'g'), metric('Energía', c.k, o.kcal, 'kcal', true), c.k > 0 ? macroBar(c) : null,

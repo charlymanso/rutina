@@ -48,11 +48,11 @@ const pulsarBorrar = async (p, sel) => { const bx = await p.locator(sel).boundin
   p = await nuevo(b, true);
   await p.click('#slot-gym'); await p.waitForSelector('#ej-anadir'); ok(await p.locator('.hint-swipe').isVisible(), 'En móvil hay una pista para deslizar');
   const n1 = await p.locator('.ficha').count(); const id1 = await p.locator('.ficha').first().getAttribute('id');
-  await swipe(p, '.swipe >> nth=0', -30); ok(await p.locator('.ficha').count() === n1 && (await p.locator('.swipe-in >> nth=0').evaluate((e) => e.style.transform)) === '', 'Un deslizamiento corto no borra y vuelve a su sitio');
-  await swipe(p, '.swipe >> nth=0', -100); const tr = await p.locator('.swipe-in >> nth=0').evaluate((e) => e.style.transform); ok(tr.includes('-88'), 'Al deslizar queda abierto el botón Quitar (' + tr + ')');
-  ok(await p.locator('.swipe-del >> nth=0').isVisible(), 'Se ve el botón rojo'); await pulsarBorrar(p, '.swipe-del >> nth=0'); await p.waitForTimeout(250);
+  await swipe(p, '.ficha-sw >> nth=0', -30); ok(await p.locator('.ficha').count() === n1 && (await p.locator('.ficha-sw .swipe-in >> nth=0').evaluate((e) => e.style.transform)) === '', 'Un deslizamiento corto no borra y vuelve a su sitio');
+  await swipe(p, '.ficha-sw >> nth=0', -100); const tr = await p.locator('.ficha-sw .swipe-in >> nth=0').evaluate((e) => e.style.transform); ok(tr.includes('-88'), 'Al deslizar queda abierto el botón Quitar (' + tr + ')');
+  ok(await p.locator('.ficha-sw .swipe-del >> nth=0').isVisible(), 'Se ve el botón rojo'); await pulsarBorrar(p, '.ficha-sw .swipe-del >> nth=0'); await p.waitForTimeout(250);
   ok(await p.locator('.ficha').count() === n1 - 1 && await p.locator('#' + id1).count() === 0, 'Pulsar el botón lo quita');
-  await p.click('#ej-restaurar'); await swipe(p, '.swipe >> nth=1', -300); await p.waitForTimeout(400); ok(await p.locator('.ficha').count() === n1 - 1, 'Deslizar hasta el final lo borra directamente');
+  await p.click('#ej-restaurar'); await swipe(p, '.ficha-sw >> nth=1', -300); await p.waitForTimeout(400); ok(await p.locator('.ficha').count() === n1 - 1, 'Deslizar hasta el final lo borra directamente');
   await p.click('.sheet.grande header .btn:not(.plain)');
   // extras del día en móvil
   await p.evaluate(() => { const f = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; const d = JSON.parse(localStorage.getItem('stub')); const hoy = f(new Date()); d.dias[hoy].extras = [{ n: 'Manzana', q: 1, u: 'ud', k: 52, p: 0.3, c: 14, f: 0.2, tipo: 'snack' }, { n: 'Nueces', q: 20, u: 'g', k: 130, p: 3, c: 3, f: 13, tipo: 'snack' }]; localStorage.setItem('congelar', '1'); localStorage.setItem('stub', JSON.stringify(d)); });
