@@ -39,7 +39,7 @@ const ICONS = {
   datos: [['ellipse', { cx: 12, cy: 6, rx: 7, ry: 3 }], ['path', { d: 'M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6' }]],
   barcode: [['path', { d: 'M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M8 9v6M11 9v6M14 9v6M17 9v6' }]],
   hogar: [['circle', { cx: 9, cy: 8, r: 3.2 }], ['path', { d: 'M3.5 19c.5-3.2 2.7-5 5.5-5s5 1.8 5.5 5' }], ['circle', { cx: 17, cy: 9, r: 2.5 }], ['path', { d: 'M16 14.2c2.6-.3 4.5 1.3 5 4.3' }]],
-  ingredientes: [['path', { d: 'M5 9h14l-1.5 10a2 2 0 0 1-2 1.7h-7a2 2 0 0 1-2-1.7L5 9zM9 9l3-5 3 5' }]],
+  ejercicios: [['path', { d: 'M3 9v6M6 7v10M18 7v10M21 9v6M6 12h12' }]],
   platos: [['path', { d: 'M6 3v6a2 2 0 0 0 4 0V3M8 3v18M17 21V3c-2 1-3.5 3.5-3.5 7 0 1.5 1 2.5 3.5 2.5' }]],
   acerca: [['circle', { cx: 12, cy: 12, r: 9 }], ['path', { d: 'M12 11v5.5' }], ['circle', { cx: 12, cy: 7.8, r: .7 }]],
 };
@@ -321,6 +321,22 @@ function editIngrediente(id, onDone, relleno = {}) {
 const ordenBtns = (i, n, mover, que) => h('span', { class: 'orden' },
   h('button', { type: 'button', class: 'ord-sube', 'aria-label': `Subir ${que}`, disabled: i === 0, onclick: () => mover(i - 1) }, '▲'),
   h('button', { type: 'button', class: 'ord-baja', 'aria-label': `Bajar ${que}`, disabled: i === n - 1, onclick: () => mover(i + 1) }, '▼'));
+/* Un ejercicio con todo su historial: renombrar (conserva los pesos) y cambiar sus series en todas las sesiones. */
+function editarEjercicio(x, despues) {
+  const nombre = h('input', { type: 'text', id: 'ej-nom', value: x.n, autocomplete: 'off' }), series = h('input', { type: 'text', id: 'ej-ser', value: x.s || '', placeholder: '4×8' });
+  const enSesion = x.sesiones.length > 0, fecha = (f) => L.parseISO(f).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  sheet({ title: 'Ejercicio', save: 'Guardar', body: [field('Nombre', nombre), enSesion ? field('Series y repeticiones', series) : null,
+    enSesion ? h('p', { class: 'mute small' }, `En tu rutina: ${[...new Set(x.sesiones)].join(', ')}.`) : h('p', { class: 'mute small' }, 'Ya no está en ninguna de tus sesiones, pero se conserva su historial.'),
+    h('div', { class: 'label' }, x.hist.length ? 'Historial' : 'Aún no hay registros'),
+    x.hist.length ? h('div', { class: 'group', id: 'ej-hist', style: 'max-height:260px;overflow:auto' }, x.hist.map((r) => h('div', { class: 'row', style: 'min-height:40px' }, h('span', { class: 'grow' }, fecha(r.f)), h('span', { class: 'mute num small' }, [r.kg != null ? `${L.kgTxt(r.kg)} kg` : (r.hecho ? 'hecho' : 'sin hacer'), r.s].filter(Boolean).join(' · '))))) : null,
+    h('p', { class: 'mute small' }, 'Si le pones el nombre de otro ejercicio que ya tengas, se juntan sus historiales.')].filter(Boolean),
+    onSave: () => {
+      const n = nombre.value.trim(); if (!n) return 'Escribe el nombre.'; if (!L.slug(n)) return 'Usa letras o números en el nombre.';
+      if (enSesion && series.value.trim() && series.value.trim() !== x.s) L.seriesEjercicio(data, x.k, series.value.trim());
+      if (n !== x.n) L.renombrarEjercicio(data, x.k, n);
+      commit(); despues && despues();
+    } });
+}
 const NOMBRE_COMIDA = { desayuno: 'Desayuno', media: 'Media mañana', comida: 'Comida', merienda: 'Merienda', cena: 'Cena' };
 function platosGuardados(m = 'comida') { // platos distintos que ya usas, para reutilizarlos
   const mapa = new Map(), esFija = L.FIJAS.includes(m), claves = esFija ? [m] : ['comida', 'cena'];
@@ -915,6 +931,22 @@ function viewAjustes() {
         h('div', { class: 'row', style: 'padding:0;gap:10px;flex-wrap:wrap' }, h('button', { class: 'btn', id: 'ing-nuevo', onclick: () => editIngrediente(null, () => render()) }, 'Nuevo ingrediente')),
         q, lista, h('p', { class: 'mute small' }, 'Si cambias el nombre, se cambia en todos tus platos y en la lista de la compra.'));
     }
+    case 'ejercicios': {
+      const q = h('input', { type: 'search', id: 'ejs-buscar', placeholder: 'Buscar ejercicio', autocomplete: 'off' }), cont = h('div', { class: 'stack', id: 'ejs-lista', style: 'gap:18px' }), todos = L.catalogoEjercicios(data);
+      const fecha = (f) => L.parseISO(f).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+      const pintar = () => {
+        const t = normalizar(q.value.trim()), vis = t ? todos.filter((x) => normalizar(x.n).includes(t)) : todos, out = [];
+        for (const [g, nombre] of L.GRUPOS_EJ) {
+          const xs = vis.filter((x) => x.grupo === g); if (!xs.length) continue;
+          out.push(h('section', { class: 'stack', style: 'gap:8px', id: 'ejs-' + g }, h('div', { class: 'label', style: 'padding-left:4px' }, `${nombre} · ${xs.length}`),
+            h('div', { class: 'group' }, xs.map((x) => tapRow(x.n, [x.s, x.ultimo ? `${L.kgTxt(x.ultimo.kg)} kg (${fecha(x.ultimo.f)})` : (x.c ? 'sin peso anotado' : ''), x.hist.length ? `${x.hist.length} ${x.hist.length === 1 ? 'vez' : 'veces'}` : ''].filter(Boolean).join(' · '), () => editarEjercicio(x, () => render()))))));
+        }
+        cont.replaceChildren(...(out.length ? out : [h('p', { class: 'mute small', id: 'ejs-vacio', style: 'padding:14px' }, todos.length ? 'Ningún ejercicio coincide.' : 'Aún no tienes ejercicios. Crea una sesión en Entreno.')]));
+      };
+      q.addEventListener('input', pintar); pintar();
+      return subpagina('Ejercicios', 'Tus ejercicios con sus series y sus pesos, agrupados por tipo de sesión', q, cont,
+        h('p', { class: 'mute small' }, 'Los pesos se guardan por el nombre del ejercicio. Si en una sesión escribes otro nombre, cuenta como un ejercicio nuevo; para renombrar uno y conservar su historial, hazlo desde aquí.'));
+    }
     case 'platos': {
       const ps = data.platosPropios.slice().sort((x, y) => x.t.localeCompare(y.t, 'es')), delMenu = platosGuardados('comida').concat(platosGuardados('cena')).filter((x, k, a) => !data.platosPropios.some((p) => p.t === x.t) && a.findIndex((y) => y.t === x.t) === k);
       return subpagina('Platos', 'Arma platos con tus ingredientes y úsalos en cualquier comida',
@@ -940,6 +972,7 @@ function viewAjustes() {
       grupo(null, filaAj('objetivos', 'objetivos', '#ff9f0a', 'Objetivos diarios', `${L.miles(o.gym.kcal)} / ${L.miles(o.sin.kcal)} kcal · ${o.gym.prot} g de proteína`)),
       grupo(null, ...(L.hogar(data).length ? [filaAj('hogar', 'hogar', '#34c759', 'Con quién comes', `Tú y ${nombresHogar()}`)] : []), filaAj('platos', 'platos', '#ff6b35', 'Platos', data.platosPropios.length ? `${data.platosPropios.length} ${data.platosPropios.length === 1 ? 'plato guardado' : 'platos guardados'}` : 'Crea tus platos con ingredientes')),
       grupo(null, filaAj('ingredientes', 'ingredientes', '#30b0c7', 'Ingredientes', `${n} ${n === 1 ? 'registrado' : 'registrados'}`)),
+      grupo(null, filaAj('ejercicios', 'ejercicios', '#ff453a', 'Ejercicios', `${L.catalogoEjercicios(data).length} con sus pesos y series`)),
       grupo(null, filaAj('datos', 'datos', '#5e5ce6', 'Datos y copias', 'Copia de seguridad y borrado'), filaAj('acerca', 'acerca', '#8e8e93', 'Acerca de Rutina', `Versión ${S.version || 'Web'}`)));
   }
 }

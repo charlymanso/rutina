@@ -221,6 +221,21 @@ assert.equal(L.esVersionNueva('0.1.10', 'v0.1.9'), false);
     assert.equal(L.diasEntrenoSemana(m), new Set(m.entreno.sesiones.flatMap((x) => x.dias)).size, 'los días de entreno cuentan días distintos');
     assert.deepEqual(normalize({ dias: { a: { bloquesQuitar: ['x', 1] }, b: { bloquesQuitar: 3 } } }).dias, { a: { bloquesQuitar: ['x'] }, b: {} });
   }
+  // ejercicios: catálogo agrupado y renombrar sin perder pesos
+  {
+    const m = makeTemplate(); m.entreno.sesiones = [{ id: 'a', t: 'Push 1', dias: [0], ej: [{ n: 'Press banca', s: '4×8', c: true }] }, { id: 'b', t: 'Sesión Fisio 2', dias: [], ej: [{ n: 'Plancha frontal', s: '3×30 s', c: false }] }, { id: 'c', t: 'Pierna', dias: [2], ej: [{ n: 'Prensa', s: '4×10', c: true }] }, { id: 'd', t: 'Pull', dias: [4], ej: [{ n: 'Remo con barra o máquina', s: '3×10', c: true }] }];
+    m.dias = { '2026-10-26': { gym: { 'press-banca': { kg: 60, hecho: true }, 'remo-con-barra-o-maquina': { kg: 50, hecho: true }, 'dominadas': { kg: 5, hecho: true } } }, '2026-11-02': { gym: { 'press-banca': { kg: 62.5, hecho: true }, 'remo-con-barra': { kg: 70, hecho: false } }, ejQuitar: ['remo-con-barra-o-maquina'], ejExtra: [{ n: 'Dominadas', s: '3×6', c: true }] } };
+    const cat = L.catalogoEjercicios(m), g = (k) => cat.find((x) => x.k === k);
+    assert.equal(g('press-banca').grupo, 'push'); assert.equal(g('plancha-frontal').grupo, 'fisio'); assert.equal(g('prensa').grupo, 'pierna'); assert.equal(g('remo-con-barra-o-maquina').grupo, 'pull');
+    assert.equal(g('dominadas').grupo, 'antiguos', 'con historial pero fuera de tus sesiones: no se pierde'); assert.equal(g('dominadas').n, 'Dominadas');
+    assert.deepEqual(g('press-banca').ultimo, { f: '2026-11-02', kg: 62.5, s: null, hecho: true }); assert.equal(g('press-banca').hist.length, 2);
+    assert.equal(L.renombrarEjercicio(m, 'remo-con-barra-o-maquina', 'Remo con barra'), 'remo-con-barra');
+    assert.equal(m.entreno.sesiones[3].ej[0].n, 'Remo con barra'); assert.deepEqual(m.dias['2026-11-02'].ejQuitar, ['remo-con-barra']);
+    assert.equal(m.dias['2026-10-26'].gym['remo-con-barra'].kg, 50, 'el peso antiguo pasa al nombre nuevo'); assert.ok(!('remo-con-barra-o-maquina' in m.dias['2026-10-26'].gym));
+    assert.equal(m.dias['2026-11-02'].gym['remo-con-barra'].kg, 70, 'si ya existía ese nombre, se unen sin perder nada');
+    L.seriesEjercicio(m, 'press-banca', '5×5'); assert.equal(m.entreno.sesiones[0].ej[0].s, '5×5');
+    assert.equal(L.renombrarEjercicio(m, 'prensa', '  '), null);
+  }
   // extras de la compra
   const c = makeTemplate(); c.extrasCompra = [{ id: 'x1', n: 'Papel de cocina', q: '2 packs', s: 'otros', ok: false }, { id: 'x2', n: 'Pollo extra', q: '', s: 'carne', ok: false }];
   const txt = L.textoCompra(c, 2); assert.ok(txt.includes('OTROS') && txt.includes('- Papel de cocina: 2 packs') && txt.includes('- Pollo extra'), 'copiar lista incluye extras');

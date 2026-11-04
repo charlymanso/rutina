@@ -228,3 +228,51 @@ export function esVersionNueva(actual, remota) {
   for (let i = 0; i < 3; i++) { if ((b[i] || 0) !== (a[i] || 0)) return (b[i] || 0) > (a[i] || 0); }
   return false;
 }
+
+// ---- ejercicios: todo lo que has hecho de cada uno, agrupado por tipo de sesión ----
+export const GRUPOS_EJ = [['push', 'Push'], ['pull', 'Pull'], ['pierna', 'Pierna'], ['fisio', 'Fisio'], ['otros', 'Otros'], ['antiguos', 'Ya no están en tu rutina']];
+export function grupoSesion(titulo) {
+  const t = String(titulo || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (/fisio|rehab|pubalgia/.test(t)) return 'fisio';
+  if (/pull|tiron|espalda|dorsal/.test(t)) return 'pull';
+  if (/push|empuje|pecho/.test(t)) return 'push';
+  if (/pierna|leg|gluteo|cuadri/.test(t)) return 'pierna';
+  return 'otros';
+}
+const bonito = (k) => { const t = k.replace(/-/g, ' '); return t.charAt(0).toUpperCase() + t.slice(1); };
+export function catalogoEjercicios(data) {
+  const mapa = new Map();
+  const toma = (k, n, base) => { if (!mapa.has(k)) mapa.set(k, { k, n, s: '', c: false, sesiones: [], grupo: null, extra: false, hist: [] }); const x = mapa.get(k); Object.assign(x, base); return x; };
+  for (const ses of data.entreno.sesiones) for (const e of ses.ej) {
+    const k = slug(e.n); if (!k) continue; const x = toma(k, e.n, {}); if (!x.s) { x.s = e.s; } x.c = x.c || !!e.c;
+    x.sesiones.push(ses.t); if (!x.grupo) x.grupo = grupoSesion(ses.t);
+  }
+  for (const f of Object.keys(data.dias).sort()) {
+    const r = data.dias[f];
+    for (const e of (r.ejExtra || [])) { const k = slug(e.n); if (k && !mapa.has(k)) toma(k, e.n, { s: e.s, c: !!e.c, extra: true }); }
+    for (const [k, g] of Object.entries(r.gym || {})) {
+      const x = mapa.get(k) || toma(k, bonito(k), { extra: true });
+      if (g && (g.kg != null || g.hecho)) x.hist.push({ f, kg: g.kg == null ? null : g.kg, s: g.s || null, hecho: !!g.hecho });
+    }
+  }
+  const out = [...mapa.values()];
+  for (const x of out) {
+    x.hist.sort((a, b) => (a.f < b.f ? 1 : -1));   // más reciente primero
+    const conPeso = x.hist.find((h) => h.kg != null); x.ultimo = conPeso || null; if (conPeso && !x.c) x.c = true;
+    if (!x.grupo) x.grupo = 'antiguos';
+  }
+  return out.sort((a, b) => a.n.localeCompare(b.n, 'es'));
+}
+// Cambia el nombre de un ejercicio en todas partes sin perder sus pesos: sesiones, ejercicios de un día, ejercicios quitados e historial. Si ya existía otro con ese nombre, se unen.
+export function renombrarEjercicio(data, k, nuevo) {
+  const n = String(nuevo || '').trim(), k2 = slug(n); if (!n || !k2) return null;
+  for (const s of data.entreno.sesiones) for (const e of s.ej) if (slug(e.n) === k) e.n = n;
+  for (const r of Object.values(data.dias)) {
+    for (const e of (r.ejExtra || [])) if (slug(e.n) === k) e.n = n;
+    if (Array.isArray(r.ejQuitar)) r.ejQuitar = r.ejQuitar.map((x) => (x === k ? k2 : x));
+    if (r.gym && k2 !== k && r.gym[k]) { r.gym[k2] = r.gym[k2] ? { ...r.gym[k], ...Object.fromEntries(Object.entries(r.gym[k2]).filter(([, v]) => v != null)) } : r.gym[k]; delete r.gym[k]; }
+  }
+  return k2;
+}
+// Cambia las series/repeticiones de un ejercicio en todas las sesiones que lo llevan
+export function seriesEjercicio(data, k, s) { for (const ses of data.entreno.sesiones) for (const e of ses.ej) if (slug(e.n) === k) e.s = s; }
