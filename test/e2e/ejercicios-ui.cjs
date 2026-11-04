@@ -14,7 +14,7 @@ async function nuevo(b, mobile = false) {
   await p.waitForTimeout(700); await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('stub')); d.dias['2026-10-26'] = { gym: { 'press-banca': { kg: 60, hecho: true } } }; d.dias['2026-11-02'] = { gym: { 'press-banca': { kg: 62.5, hecho: true }, 'dominadas': { kg: 5, hecho: true } }, ejExtra: [{ n: 'Dominadas', s: '3×6', c: true }] }; localStorage.setItem('stub', JSON.stringify(d)); localStorage.setItem('congelar', '1'); });
   await p.reload(); await p.waitForSelector('h1.title'); await p.evaluate(() => localStorage.removeItem('congelar')); await p.click('nav >> text=Ajustes'); await p.click('#aj-ejercicios'); await p.waitForSelector('#ejs-lista');
   const grupos = await p.locator('#ejs-lista section').evaluateAll((l) => l.map((x) => x.id)); ok(grupos.includes('ejs-push') && grupos.includes('ejs-pull') && grupos.includes('ejs-pierna'), 'Ejercicios agrupados: ' + grupos.join(', '));
-  ok(await p.locator('#ejs-antiguos').count() === 1 && (await p.textContent('#ejs-antiguos')).includes('Dominadas'), 'Lo que tiene historial pero ya no está en tus sesiones se conserva');
+  ok(await p.locator('#ejs-antiguos').count() === 0 && (await p.textContent('#ejs-pull')).includes('Dominadas'), 'Lo que tiene historial pero no está en tus sesiones va a su grupo (Dominadas en Pull)');
   ok((await p.textContent('#ejs-push')).includes('62,5 kg'), 'Se ve el último peso (62,5 kg)');
   await p.fill('#ejs-buscar', 'press banca'); await p.locator('#ejs-lista .row').first().click(); await p.waitForSelector('#ej-hist');
   ok((await p.locator('#ej-hist .row').count()) === 2, 'El historial lista cada registro');

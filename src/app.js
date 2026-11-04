@@ -326,7 +326,7 @@ function editarEjercicio(x, despues) {
   const nombre = h('input', { type: 'text', id: 'ej-nom', value: x.n, autocomplete: 'off' }), series = h('input', { type: 'text', id: 'ej-ser', value: x.s || '', placeholder: '4×8' });
   const enSesion = x.sesiones.length > 0, fecha = (f) => L.parseISO(f).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   sheet({ title: 'Ejercicio', save: 'Guardar', body: [field('Nombre', nombre), enSesion ? field('Series y repeticiones', series) : null,
-    enSesion ? h('p', { class: 'mute small' }, `En tu rutina: ${[...new Set(x.sesiones)].join(', ')}.`) : h('p', { class: 'mute small' }, 'Ya no está en ninguna de tus sesiones, pero se conserva su historial.'),
+    enSesion ? h('p', { class: 'mute small' }, `En tu rutina: ${[...new Set(x.sesiones)].join(', ')}.`) : h('p', { class: 'mute small' }, 'Ahora mismo no está en ninguna sesión, pero se conserva su historial por si lo vuelves a hacer.'),
     h('div', { class: 'label' }, x.hist.length ? 'Historial' : 'Aún no hay registros'),
     x.hist.length ? h('div', { class: 'group', id: 'ej-hist', style: 'max-height:260px;overflow:auto' }, x.hist.map((r) => h('div', { class: 'row', style: 'min-height:40px' }, h('span', { class: 'grow' }, fecha(r.f)), h('span', { class: 'mute num small' }, [r.kg != null ? `${L.kgTxt(r.kg)} kg` : (r.hecho ? 'hecho' : 'sin hacer'), r.s].filter(Boolean).join(' · '))))) : null,
     h('p', { class: 'mute small' }, 'Si le pones el nombre de otro ejercicio que ya tengas, se juntan sus historiales.')].filter(Boolean),

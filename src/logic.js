@@ -230,7 +230,7 @@ export function esVersionNueva(actual, remota) {
 }
 
 // ---- ejercicios: todo lo que has hecho de cada uno, agrupado por tipo de sesión ----
-export const GRUPOS_EJ = [['push', 'Push'], ['pull', 'Pull'], ['pierna', 'Pierna'], ['fisio', 'Fisio'], ['otros', 'Otros'], ['antiguos', 'Ya no están en tu rutina']];
+export const GRUPOS_EJ = [['push', 'Push'], ['pull', 'Pull'], ['pierna', 'Pierna'], ['fisio', 'Fisio'], ['otros', 'Otros']];
 export function grupoSesion(titulo) {
   const t = String(titulo || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   if (/fisio|rehab|pubalgia/.test(t)) return 'fisio';
@@ -238,6 +238,15 @@ export function grupoSesion(titulo) {
   if (/push|empuje|pecho/.test(t)) return 'push';
   if (/pierna|leg|gluteo|cuadri/.test(t)) return 'pierna';
   return 'otros';
+}
+// Para un ejercicio que no está en ninguna sesión: se coloca por lo que es (y, si no se sabe, por la sesión que tocaba los días que lo hiciste)
+export function grupoEjercicio(nombre) {
+  const t = String(nombre || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (/aductor|aduccion|psoas|movilidad|plancha|dead ?bug|bird ?dog|pallof|copenhague|cosaca|estiramiento|hollow|rotacion interna|isometric|\biso\b|pared|fisio|rehab/.test(t)) return 'fisio';
+  if (/sentadilla|prensa|zancada|peso muerto|hip ?thrust|femoral|gemelo|cuadriceps|gluteo|abductor|pierna|\bleg\b|step ?up/.test(t)) return 'pierna';
+  if (/jalon|\bremo\b|biceps|martillo|face ?pull|dominada|rotacion externa|pajaro|encogimiento|\bpull|dorsal|espalda|\bcurl\b/.test(t)) return 'pull';
+  if (/press|banca|apertura|\bfly\b|triceps|elevacion|fondos|flexion|militar|push|pecho|hombro/.test(t)) return 'push';
+  return null;
 }
 const bonito = (k) => { const t = k.replace(/-/g, ' '); return t.charAt(0).toUpperCase() + t.slice(1); };
 export function catalogoEjercicios(data) {
@@ -259,7 +268,13 @@ export function catalogoEjercicios(data) {
   for (const x of out) {
     x.hist.sort((a, b) => (a.f < b.f ? 1 : -1));   // más reciente primero
     const conPeso = x.hist.find((h) => h.kg != null); x.ultimo = conPeso || null; if (conPeso && !x.c) x.c = true;
-    if (!x.grupo) x.grupo = 'antiguos';
+    if (!x.grupo) {
+      x.grupo = grupoEjercicio(x.n);
+      if (!x.grupo) {   // por la sesión que tocaba esos días
+        const cuenta = {}; for (const r of x.hist) { try { const t = tituloEntreno(data, parseISO(r.f)); if (t) for (const nom of t.split(' + ')) { const g = grupoSesion(nom); cuenta[g] = (cuenta[g] || 0) + 1; } } catch { /* día sin sesión */ } }
+        x.grupo = Object.entries(cuenta).sort((a, b) => b[1] - a[1]).map(([g]) => g).find((g) => g !== 'otros') || 'otros';
+      }
+    }
   }
   return out.sort((a, b) => a.n.localeCompare(b.n, 'es'));
 }
