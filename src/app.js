@@ -212,10 +212,21 @@ function editIngrediente(id, onDone, relleno = {}) {
         s: seccion.value, ...(g.por ? { por: g.por } : {}), ...(unidad.value === 'ud' && plural.value.trim() ? { pl: plural.value.trim() } : {}) };
       commit(); onDone && onDone(nid);
     },
-    extra: id ? h('button', { class: 'btn danger', onclick: () => {
+    extra: id ? h('div', { class: 'row', style: 'padding:0;gap:4px' }, h('button', { class: 'btn danger', onclick: () => {
       const n = usoIngrediente(id); if (n) { toast(`Se usa en ${n} ${n === 1 ? 'plato' : 'platos'}. Quítalo de ahí primero.`); return; }
       confirmSheet('¿Borrar ingrediente?', `Se eliminará “${g.n}”.`, 'Borrar', () => { delete data.ingredientes[id]; commit(); sheets.slice().forEach((s) => s.close()); });
-    } }, 'Borrar') : null });
+    } }, 'Borrar'), h('button', { class: 'btn plain', id: 'ing-unir', onclick: () => unirIngrediente(id, onDone) }, 'Unir con otro…')) : null });
+}
+/* Unir dos ingredientes que son lo mismo (p. ej. uno escaneado y otro escrito a mano): se elige con cuál quedarse. */
+function unirIngrediente(id, despues) {
+  const g = data.ingredientes[id], q = h('input', { type: 'search', id: 'unir-buscar', placeholder: 'Buscar ingrediente', autocomplete: 'off' }), lista = h('div', { class: 'group', id: 'unir-lista' });
+  const otros = Object.entries(data.ingredientes).filter(([k, x]) => k !== id && x.u === g.u).sort((x, y) => x[1].n.localeCompare(y[1].n, 'es'));
+  const pintar = () => { const t = normalizar(q.value.trim()), vis = (t ? otros.filter(([, x]) => normalizar(x.n).includes(t)) : otros).slice(0, 30);
+    lista.replaceChildren(...(vis.length ? vis.map(([k, x]) => h('button', { type: 'button', class: 'row tap', onclick: () => confirmSheet('¿Unir estos dos?', `Todo lo que usa “${g.n}” pasará a usar “${x.n}”, y “${g.n}” se borrará. Se quedan el nombre y los datos de “${x.n}”.`, 'Unir', () => {
+      if (!L.unirIngredientes(data, id, k)) return toast('No se han podido unir.'); commit(); sheets.slice().forEach((z) => z.close()); toast(`Unidos en “${x.n}”.`); despues && despues(); }) }, h('div', { class: 'grow' }, x.n, h('div', { class: 'sub num' }, macroPor100(x))), h('span', { class: 'chev' }, '›')))
+      : [h('p', { class: 'mute small', style: 'padding:14px' }, 'No hay otro ingrediente que se mida igual.')])); };
+  q.addEventListener('input', pintar); pintar();
+  sheet({ title: 'Unir con…', cancel: 'Cerrar', body: [h('p', { class: 'mute small' }, `Elige el ingrediente con el que te quedas. “${g.n}” desaparecerá y sus usos pasarán al que elijas.`), q, lista] });
 }
 
 /* Flechas para cambiar el orden de una lista: mover(j) lleva el elemento i a la posición j. */
@@ -880,7 +891,7 @@ function viewAjustes() {
       q.addEventListener('input', pintar); pintar();
       return subpagina('Ingredientes', 'Los que ya tienes registrados: cambia el nombre, los datos nutricionales o la sección del súper',
         h('div', { class: 'row', style: 'padding:0;gap:10px;flex-wrap:wrap' }, h('button', { class: 'btn', id: 'ing-nuevo', onclick: () => editIngrediente(null, () => render()) }, 'Nuevo ingrediente')),
-        q, lista, h('p', { class: 'mute small' }, 'Si cambias el nombre, se cambia en todos tus platos y en la lista de la compra.'));
+        q, lista, h('p', { class: 'mute small' }, 'Si cambias el nombre, se cambia en todos tus platos y en la lista de la compra. Si tienes dos que son lo mismo, abre uno y pulsa “Unir con otro…”.'));
     }
     case 'ejercicios': {
       const q = h('input', { type: 'search', id: 'ejs-buscar', placeholder: 'Buscar ejercicio', autocomplete: 'off' }), cont = h('div', { class: 'stack', id: 'ejs-lista', style: 'gap:18px' }), todos = L.catalogoEjercicios(data);

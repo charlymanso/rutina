@@ -330,3 +330,18 @@ export function fusionar(local, remoto, base, preferir) {
   for (const f of new Set([...Object.keys(local.dias || {}), ...Object.keys(remoto.dias || {})])) { const v = elige((local.dias || {})[f], (remoto.dias || {})[f], f in base.d ? base.d[f] : '-', 'Día ' + f); if (v !== undefined) out.dias[f] = v; }
   return { datos: out, conflictos };
 }
+
+// ---- unir dos ingredientes que son lo mismo ----
+// Todo lo que usaba `de` pasa a usar `a` (menú, comidas fijas, platos, cambios de un día y marcas de la compra); si un plato llevaba los dos, se suman. `de` se borra.
+export function unirIngredientes(data, de, a) {
+  const x = data.ingredientes[de], y = data.ingredientes[a]; if (!x || !y || de === a || x.u !== y.u) return false;
+  const pasa = (items) => { if (!Array.isArray(items) || !items.some((it) => it[0] === de)) return; let suma = 0; for (const it of items) if (it[0] === de || it[0] === a) suma += it[1];
+    const i = items.findIndex((it) => it[0] === de || it[0] === a); items.splice(0, items.length, ...items.filter((it, j) => j === i || (it[0] !== de && it[0] !== a))); items.find((it) => it[0] === de || it[0] === a).splice(0, 2, a, suma); };
+  for (const w of data.menu.semanas) for (const d of w) for (const m of Object.keys(d)) if (d[m]) pasa(d[m].items);
+  for (const f of Object.values(data.menu.fijos || {})) pasa(f.items);
+  for (const p of data.platosPropios || []) pasa(p.items);
+  for (const r of Object.values(data.dias)) for (const c of Object.values(r.cambios || {})) if (c) pasa(c.items);
+  for (const c of Object.values(data.compra || {})) if (c && c.marcados && de in c.marcados) { if (c.marcados[de]) c.marcados[a] = true; delete c.marcados[de]; }
+  if (!y.code && x.code) y.code = x.code; if ((x.uso || 0) > (y.uso || 0)) y.uso = x.uso;
+  delete data.ingredientes[de]; return true;
+}

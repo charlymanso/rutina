@@ -261,6 +261,15 @@ assert.equal(L.esVersionNueva('0.1.10', 'v0.1.9'), false);
     const borra = copia(); delete borra.dias['2026-11-01']; assert.ok(!('2026-11-01' in L.fusionar(borra, copia(), hs).datos.dias), 'un día borrado en un lado se borra');
     assert.equal(L.fusionar(movil, pc, null), null); assert.equal(L.huella({ a: 1, b: [1, 2] }), L.huella({ b: [1, 2], a: 1 }), 'la huella no depende del orden de las claves');
   }
+  // unir ingredientes repetidos
+  {
+    const m = normalize(makeTemplate()); m.ingredientes.a1 = { n: 'Ñoquis', u: 'g', k: 150, p: 4, s: 'despensa' }; m.ingredientes.a2 = { n: 'Gnocchi', u: 'g', k: 167, p: 4.4, s: 'despensa', code: '123' }; m.ingredientes.u1 = { n: 'Cosa', u: 'ud', k: 1, p: 1, s: 'otros' };
+    m.platosPropios = [{ t: 'P', items: [['a2', 400], ['arroz', 50]] }, { t: 'Q', items: [['a1', 100], ['a2', 50]] }]; m.menu.semanas[0][0].comida = { t: 'P', items: [['a2', 400]] };
+    m.dias = { '2026-11-02': { cambios: { comida: { t: 'P', items: [['a2', 200]] } } } }; m.compra = { x: { marcados: { a2: true } } };
+    assert.equal(L.unirIngredientes(m, 'a2', 'u1'), false, 'no se unen si se miden distinto'); assert.equal(L.unirIngredientes(m, 'a2', 'a1'), true);
+    assert.ok(!('a2' in m.ingredientes) && m.ingredientes.a1.code === '123'); assert.deepEqual(m.platosPropios[0].items, [['a1', 400], ['arroz', 50]]); assert.deepEqual(m.platosPropios[1].items, [['a1', 150]], 'si un plato llevaba los dos, se suman');
+    assert.deepEqual(m.menu.semanas[0][0].comida.items, [['a1', 400]]); assert.deepEqual(m.dias['2026-11-02'].cambios.comida.items, [['a1', 200]]); assert.deepEqual(m.compra.x.marcados, { a1: true });
+  }
   // extras de la compra
   const c = makeTemplate(); c.extrasCompra = [{ id: 'x1', n: 'Papel de cocina', q: '2 packs', s: 'otros', ok: false }, { id: 'x2', n: 'Pollo extra', q: '', s: 'carne', ok: false }];
   const txt = L.textoCompra(c, 2); assert.ok(txt.includes('OTROS') && txt.includes('- Papel de cocina: 2 packs') && txt.includes('- Pollo extra'), 'copiar lista incluye extras');

@@ -20,5 +20,11 @@ async function nuevo(b, mobile = false) {
   await p.click('#ing-nuevo'); await p.waitForSelector('.sheet input[type=text]'); await p.locator('.sheet input[type=text]').first().fill('Zumo raro'); await p.locator('.sheet input[type=number]').first().fill('45');
   await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(300);
   await p.fill('#ing-buscar', 'zumo raro'); ok(await p.locator('#ing-lista .row').count() === 1, 'Se puede añadir un ingrediente nuevo');
+  // unir dos que son lo mismo
+  await p.click('#ing-nuevo'); await p.waitForSelector('.sheet input[type=text]'); await p.locator('.sheet input[type=text]').first().fill('Zumo normal'); await p.locator('.sheet input[type=number]').first().fill('45'); await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(300);
+  await p.fill('#ing-buscar', 'zumo'); ok(await p.locator('#ing-lista .row').count() === 2, 'Hay dos zumos');
+  await p.locator('#ing-lista .row:has-text("Zumo raro")').click(); await p.click('#ing-unir'); await p.waitForSelector('#unir-lista'); await p.fill('#unir-buscar', 'zumo normal'); await p.locator('#unir-lista .row').first().click();
+  await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(400);
+  await p.fill('#ing-buscar', 'zumo'); ok(await p.locator('#ing-lista .row').count() === 1 && (await p.textContent('#ing-lista')).includes('Zumo normal') && await p.locator('.sheet').count() === 0, 'Unir deja uno solo (Zumo normal)');
   ok(p.errs.length === 0, 'Sin errores JS ' + p.errs.join('|')); await b.close();
 })();
