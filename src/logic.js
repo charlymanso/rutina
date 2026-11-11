@@ -256,9 +256,10 @@ export function catalogoEjercicios(data) {
     const k = slug(e.n); if (!k) continue; const x = toma(k, e.n, {}); if (!x.s) { x.s = e.s; } x.c = x.c || !!e.c;
     x.sesiones.push(ses.t); if (!x.grupo) x.grupo = grupoSesion(ses.t);
   }
+  const diasExtra = new Map();
   for (const f of Object.keys(data.dias).sort()) {
     const r = data.dias[f];
-    for (const e of (r.ejExtra || [])) { const k = slug(e.n); if (k && !mapa.has(k)) toma(k, e.n, { s: e.s, c: !!e.c, extra: true }); }
+    for (const e of (r.ejExtra || [])) { const k = slug(e.n); if (!k) continue; if (!mapa.has(k)) toma(k, e.n, { extra: true }); const x = mapa.get(k); if (x.extra) { x.s = e.s; x.c = x.c || !!e.c; (diasExtra.get(k) || diasExtra.set(k, []).get(k)).push(f); } }
     for (const [k, g] of Object.entries(r.gym || {})) {
       const x = mapa.get(k) || toma(k, bonito(k), { extra: true });
       if (g && (g.kg != null || g.hecho)) x.hist.push({ f, kg: g.kg == null ? null : g.kg, s: g.s || null, hecho: !!g.hecho });
@@ -268,12 +269,14 @@ export function catalogoEjercicios(data) {
   for (const x of out) {
     x.hist.sort((a, b) => (a.f < b.f ? 1 : -1));   // más reciente primero
     const conPeso = x.hist.find((h) => h.kg != null); x.ultimo = conPeso || null; if (conPeso && !x.c) x.c = true;
-    if (!x.grupo) {
-      x.grupo = grupoEjercicio(x.n);
-      if (!x.grupo) {   // por la sesión que tocaba esos días
-        const cuenta = {}; for (const r of x.hist) { try { const t = tituloEntreno(data, parseISO(r.f)); if (t) for (const nom of t.split(' + ')) { const g = grupoSesion(nom); cuenta[g] = (cuenta[g] || 0) + 1; } } catch { /* día sin sesión */ } }
-        x.grupo = Object.entries(cuenta).sort((a, b) => b[1] - a[1]).map(([g]) => g).find((g) => g !== 'otros') || 'otros';
-      }
+    const fijado = (data.entreno.grupos || {})[x.k];
+    if (fijado && GRUPOS_EJ.some(([g]) => g === fijado)) x.grupo = fijado;   // el que elegiste a mano manda
+    else if (!x.grupo) {
+      // Añadido solo algún día: va al grupo de la sesión de esos días (si ese día mezclaste varias, decide lo que es el ejercicio)
+      const cuenta = {}, dias = diasExtra.get(x.k) || x.hist.map((r) => r.f);
+      for (const f of dias) { try { const d = parseISO(f), ses = sesionDelDia(data, d); if (ses) for (const z of new Set([ses, ...bloquesDelDia(data, d)].map((y) => grupoSesion(y.t)))) if (z !== 'otros') cuenta[z] = (cuenta[z] || 0) + 1; } catch { /* día sin sesión */ } }
+      const orden = Object.entries(cuenta).sort((a, b) => b[1] - a[1]), nombre = grupoEjercicio(x.n);
+      x.grupo = !orden.length ? (nombre || 'otros') : orden.length > 1 && orden[0][1] === orden[1][1] ? (orden.some(([g]) => g === nombre) ? nombre : orden[0][0]) : orden[0][0];
     }
   }
   return out.sort((a, b) => a.n.localeCompare(b.n, 'es'));
@@ -287,7 +290,10 @@ export function renombrarEjercicio(data, k, nuevo) {
     if (Array.isArray(r.ejQuitar)) r.ejQuitar = r.ejQuitar.map((x) => (x === k ? k2 : x));
     if (r.gym && k2 !== k && r.gym[k]) { r.gym[k2] = r.gym[k2] ? { ...r.gym[k], ...Object.fromEntries(Object.entries(r.gym[k2]).filter(([, v]) => v != null)) } : r.gym[k]; delete r.gym[k]; }
   }
+  const gs = data.entreno.grupos; if (gs && k2 !== k && gs[k]) { if (!gs[k2]) gs[k2] = gs[k]; delete gs[k]; }
   return k2;
 }
+// Fija a mano el grupo de un ejercicio (null: vuelve al automático)
+export function fijarGrupoEjercicio(data, k, g) { const gs = (data.entreno.grupos = data.entreno.grupos || {}); if (g) gs[k] = g; else delete gs[k]; }
 // Cambia las series/repeticiones de un ejercicio en todas las sesiones que lo llevan
 export function seriesEjercicio(data, k, s) { for (const ses of data.entreno.sesiones) for (const e of ses.ej) if (slug(e.n) === k) e.s = s; }

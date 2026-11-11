@@ -14,11 +14,14 @@ async function nuevo(b, mobile = false) {
   await p.waitForTimeout(700); await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('stub')); d.dias['2026-10-26'] = { gym: { 'press-banca': { kg: 60, hecho: true } } }; d.dias['2026-11-02'] = { gym: { 'press-banca': { kg: 62.5, hecho: true }, 'dominadas': { kg: 5, hecho: true } }, ejExtra: [{ n: 'Dominadas', s: '3×6', c: true }] }; localStorage.setItem('stub', JSON.stringify(d)); localStorage.setItem('congelar', '1'); });
   await p.reload(); await p.waitForSelector('h1.title'); await p.evaluate(() => localStorage.removeItem('congelar')); await p.click('nav >> text=Ajustes'); await p.click('#aj-ejercicios'); await p.waitForSelector('#ejs-lista');
   const grupos = await p.locator('#ejs-lista section').evaluateAll((l) => l.map((x) => x.id)); ok(grupos.includes('ejs-push') && grupos.includes('ejs-pull') && grupos.includes('ejs-pierna'), 'Ejercicios agrupados: ' + grupos.join(', '));
-  ok(await p.locator('#ejs-antiguos').count() === 0 && (await p.textContent('#ejs-pull')).includes('Dominadas'), 'Lo que tiene historial pero no está en tus sesiones va a su grupo (Dominadas en Pull)');
+  const sesLunes = await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('stub')); const x = d.entreno.sesiones.find((y) => (y.dias || []).includes(0)); return x ? x.t : ''; });   // 2026-11-02 es lunes
+  ok(await p.locator('#ejs-antiguos').count() === 0 && (await p.textContent('#ejs-lista')).includes('Dominadas'), 'Lo que añadiste solo un día sigue en la lista, en un grupo (sesión de ese lunes: ' + sesLunes + ')');
   ok((await p.textContent('#ejs-push')).includes('62,5 kg'), 'Se ve el último peso (62,5 kg)');
   await p.fill('#ejs-buscar', 'press banca'); await p.locator('#ejs-lista .row').first().click(); await p.waitForSelector('#ej-hist');
   ok((await p.locator('#ej-hist .row').count()) === 2, 'El historial lista cada registro');
   await p.fill('#ej-nom', 'Press banca plano'); await p.fill('#ej-ser', '5×5'); await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(300);
   await p.fill('#ejs-buscar', 'plano'); const txt = await p.textContent('#ejs-lista'); ok(txt.includes('Press banca plano') && txt.includes('5×5') && txt.includes('62,5 kg'), 'Renombrar conserva el peso y cambia las series: ' + txt.replace(/\s+/g, ' ').slice(0, 90));
+  await p.fill('#ejs-buscar', 'dominadas'); await p.locator('#ejs-lista .row').first().click(); await p.waitForSelector('#ej-grupo'); await p.selectOption('#ej-grupo', 'pierna'); await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(300);
+  await p.fill('#ejs-buscar', ''); ok((await p.textContent('#ejs-pierna')).includes('Dominadas'), 'Se puede elegir el grupo a mano');
   ok(p.errs.length === 0, 'Sin errores JS ' + p.errs.join('|')); await b.close();
 })();

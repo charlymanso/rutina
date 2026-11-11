@@ -227,7 +227,7 @@ assert.equal(L.esVersionNueva('0.1.10', 'v0.1.9'), false);
     m.dias = { '2026-10-26': { gym: { 'press-banca': { kg: 60, hecho: true }, 'remo-con-barra-o-maquina': { kg: 50, hecho: true }, 'dominadas': { kg: 5, hecho: true } } }, '2026-11-02': { gym: { 'press-banca': { kg: 62.5, hecho: true }, 'remo-con-barra': { kg: 70, hecho: false } }, ejQuitar: ['remo-con-barra-o-maquina'], ejExtra: [{ n: 'Dominadas', s: '3×6', c: true }] } };
     const cat = L.catalogoEjercicios(m), g = (k) => cat.find((x) => x.k === k);
     assert.equal(g('press-banca').grupo, 'push'); assert.equal(g('plancha-frontal').grupo, 'fisio'); assert.equal(g('prensa').grupo, 'pierna'); assert.equal(g('remo-con-barra-o-maquina').grupo, 'pull');
-    assert.equal(g('dominadas').grupo, 'pull', 'con historial pero fuera de tus sesiones: se coloca por lo que es, no se pierde');
+    assert.equal(g('dominadas').grupo, 'push', 'añadido solo un día (un lunes de Push): queda en el grupo de esa sesión, no se pierde');
     assert.equal(L.grupoEjercicio('Elevaciones laterales en máquina'), 'push'); assert.equal(L.grupoEjercicio('Sentadilla en pared unilateral con pelota'), 'fisio'); assert.equal(L.grupoEjercicio('Remo en T en máquina'), 'pull'); assert.equal(L.grupoEjercicio('Curl femoral'), 'pierna'); assert.equal(L.grupoEjercicio('Caminar inclinado'), null); assert.equal(g('dominadas').n, 'Dominadas');
     assert.deepEqual(g('press-banca').ultimo, { f: '2026-11-02', kg: 62.5, s: null, hecho: true }); assert.equal(g('press-banca').hist.length, 2);
     assert.equal(L.renombrarEjercicio(m, 'remo-con-barra-o-maquina', 'Remo con barra'), 'remo-con-barra');
@@ -236,6 +236,16 @@ assert.equal(L.esVersionNueva('0.1.10', 'v0.1.9'), false);
     assert.equal(m.dias['2026-11-02'].gym['remo-con-barra'].kg, 70, 'si ya existía ese nombre, se unen sin perder nada');
     L.seriesEjercicio(m, 'press-banca', '5×5'); assert.equal(m.entreno.sesiones[0].ej[0].s, '5×5');
     assert.equal(L.renombrarEjercicio(m, 'prensa', '  '), null);
+    // lo que añades solo un día va al grupo de la sesión de ese día
+    const lunes = '2026-11-09', mie = '2026-11-11';   // lunes: Push 1; miércoles: Pierna
+    m.dias[lunes] = { ejExtra: [{ n: 'Cruces raros', s: '3×12', c: true }] }; m.dias[mie] = { ejExtra: [{ n: 'Hack squat', s: '3×10', c: true }, { n: 'Cosa nueva', s: '3×10', c: true }], gym: { 'hack-squat': { kg: 80, hecho: true } } };
+    m.dias['2026-11-05'] = { entreno: 'b', bloques: ['c'], ejExtra: [{ n: 'Hack squat', s: '3×8', c: true }] };   // un día de fisio al que sumaste pierna
+    let c2 = L.catalogoEjercicios(m), g2 = (k) => c2.find((x) => x.k === k);
+    assert.equal(g2('cruces-raros').grupo, 'push', 'añadido en un día de push: queda en Push'); assert.equal(g2('cosa-nueva').grupo, 'pierna');
+    assert.equal(g2('hack-squat').grupo, 'pierna', 'si un día mezclaste fisio y pierna, cuenta dónde lo haces más'); assert.equal(g2('hack-squat').s, '3×10', 'se queda con las series más recientes');
+    L.fijarGrupoEjercicio(m, 'cosa-nueva', 'pull'); assert.equal(L.catalogoEjercicios(m).find((x) => x.k === 'cosa-nueva').grupo, 'pull', 'el grupo elegido a mano manda');
+    L.renombrarEjercicio(m, 'cosa-nueva', 'Cosa vieja'); assert.equal(m.entreno.grupos['cosa-vieja'], 'pull'); L.fijarGrupoEjercicio(m, 'cosa-vieja', null); assert.ok(!('cosa-vieja' in m.entreno.grupos));
+    assert.ok(!('grupos' in normalize({ entreno: { grupos: [1] } }).entreno)); assert.deepEqual(normalize({ entreno: { grupos: { a: 'pull' } } }).entreno.grupos, { a: 'pull' });
   }
   // extras de la compra
   const c = makeTemplate(); c.extrasCompra = [{ id: 'x1', n: 'Papel de cocina', q: '2 packs', s: 'otros', ok: false }, { id: 'x2', n: 'Pollo extra', q: '', s: 'carne', ok: false }];

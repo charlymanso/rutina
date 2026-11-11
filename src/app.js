@@ -324,8 +324,9 @@ const ordenBtns = (i, n, mover, que) => h('span', { class: 'orden' },
 /* Un ejercicio con todo su historial: renombrar (conserva los pesos) y cambiar sus series en todas las sesiones. */
 function editarEjercicio(x, despues) {
   const nombre = h('input', { type: 'text', id: 'ej-nom', value: x.n, autocomplete: 'off' }), series = h('input', { type: 'text', id: 'ej-ser', value: x.s || '', placeholder: '4×8' });
+  const fijado = (data.entreno.grupos || {})[x.k] || '', grupo = h('select', { id: 'ej-grupo', value: fijado }, [['', `Automático (${(L.GRUPOS_EJ.find(([g]) => g === (fijado ? null : x.grupo)) || [0, 'según la sesión'])[1]})`], ...L.GRUPOS_EJ].map(([v, t]) => h('option', { value: v }, t)));
   const enSesion = x.sesiones.length > 0, fecha = (f) => L.parseISO(f).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-  sheet({ title: 'Ejercicio', save: 'Guardar', body: [field('Nombre', nombre), enSesion ? field('Series y repeticiones', series) : null,
+  sheet({ title: 'Ejercicio', save: 'Guardar', body: [field('Nombre', nombre), enSesion ? field('Series y repeticiones', series) : null, field('Grupo', grupo),
     enSesion ? h('p', { class: 'mute small' }, `En tu rutina: ${[...new Set(x.sesiones)].join(', ')}.`) : h('p', { class: 'mute small' }, 'Ahora mismo no está en ninguna sesión, pero se conserva su historial por si lo vuelves a hacer.'),
     h('div', { class: 'label' }, x.hist.length ? 'Historial' : 'Aún no hay registros'),
     x.hist.length ? h('div', { class: 'group', id: 'ej-hist', style: 'max-height:260px;overflow:auto' }, x.hist.map((r) => h('div', { class: 'row', style: 'min-height:40px' }, h('span', { class: 'grow' }, fecha(r.f)), h('span', { class: 'mute num small' }, [r.kg != null ? `${L.kgTxt(r.kg)} kg` : (r.hecho ? 'hecho' : 'sin hacer'), r.s].filter(Boolean).join(' · '))))) : null,
@@ -333,6 +334,7 @@ function editarEjercicio(x, despues) {
     onSave: () => {
       const n = nombre.value.trim(); if (!n) return 'Escribe el nombre.'; if (!L.slug(n)) return 'Usa letras o números en el nombre.';
       if (enSesion && series.value.trim() && series.value.trim() !== x.s) L.seriesEjercicio(data, x.k, series.value.trim());
+      if (grupo.value !== fijado) L.fijarGrupoEjercicio(data, x.k, grupo.value || null);
       if (n !== x.n) L.renombrarEjercicio(data, x.k, n);
       commit(); despues && despues();
     } });

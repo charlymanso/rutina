@@ -61,6 +61,7 @@ export function normalize(raw) {
   out.menu.semanas = out.menu.semanas.map((w) => Array.from({ length: 7 }, (_, i) => ({ comida: null, cena: null, ...((w || [])[i] || {}) })));
   out.entreno = { ...base.entreno, ...(d.entreno || {}) };
   if (!Array.isArray(out.entreno.sesiones)) out.entreno.sesiones = [];
+  if (!out.entreno.grupos || typeof out.entreno.grupos !== 'object' || Array.isArray(out.entreno.grupos)) delete out.entreno.grupos;
   const usados = new Set();                                    // versiones anteriores: una sesión = un día (dia) y sin identificador
   out.entreno.sesiones = out.entreno.sesiones.map((x, i) => {
     const { dia, ...r } = x || {}; r.dias = Array.isArray(r.dias) ? [...new Set(r.dias.filter((n) => n >= 0 && n <= 6))].sort() : (Number.isInteger(dia) ? [dia] : []);
