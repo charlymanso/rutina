@@ -78,7 +78,7 @@ const parseKcal = (t) => parseInt(t.replace(/\./g, '').match(/(\d+)\s*kcal/)[1],
   await p.click('[aria-label="Quitar Chocolate negro 70 %"]'); ok(await p.locator('.row:has-text("Chocolate negro")').count() === 0, 'Se puede quitar un extra');
   // ---- Menú no cuenta los extras ----
   // ---- Ajustes: ingredientes con macros ----
-  await p.click('nav >> text=Ajustes'); ok(await p.locator('#aj-ingredientes').count() === 0, 'Ajustes: sin lista de ingredientes');
+  await p.click('nav >> text=Ajustes'); ok(await p.locator('#aj-ingredientes').count() === 1, 'Ajustes: Ingredientes es una sección aparte');
   ok(p.errs.length === 0, 'Sin errores JS: ' + JSON.stringify(p.errs));
   // ---- Navegador sin la app de escritorio ----
   const w = await nuevo(b, { escritorio: false }); await w.waitForSelector('.sheet'); await w.click('text=Empezar con un plan de ejemplo'); await w.waitForSelector('.slot');

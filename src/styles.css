@@ -68,7 +68,7 @@ h2.sec{font-size:22px;font-weight:700;letter-spacing:-.02em}
 .seg button{padding:5px 14px;border-radius:7px;font-weight:500;font-size:14px;color:var(--ink)}
 .seg button[aria-pressed=true]{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.16)}
 @media(prefers-color-scheme:dark){.seg button[aria-pressed=true]{background:#636366}}
-input[type=text],input[type=number],input[type=time],input[type=password],select,textarea{width:100%;background:var(--fill);border:0;border-radius:10px;padding:9px 12px;min-height:38px;appearance:none;-webkit-appearance:none}
+input[type=text],input[type=number],input[type=time],input[type=password],input[type=url],input[type=search],input[type=date],select,textarea{width:100%;background:var(--fill);border:0;border-radius:10px;padding:9px 12px;min-height:38px;appearance:none;-webkit-appearance:none}
 select{background-image:linear-gradient(45deg,transparent 50%,var(--faint) 50%),linear-gradient(135deg,var(--faint) 50%,transparent 50%);background-position:calc(100% - 17px) 50%,calc(100% - 12px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:30px}
 input::placeholder{color:var(--faint)}
 .field{display:flex;flex-direction:column;gap:6px}
@@ -423,3 +423,19 @@ b.over,.metric .over{color:var(--red)}
 .orden{display:inline-flex;flex-direction:column;gap:2px}
 .orden button{border:0;background:var(--fill,rgba(120,120,128,.14));color:var(--muted,#6e6e73);border-radius:6px;width:26px;height:18px;font-size:9px;line-height:1;cursor:pointer;padding:0}
 .orden button:disabled{opacity:.3;cursor:default}
+
+.grafica{width:100%;height:auto;display:block;background:var(--fill);border-radius:12px}
+.g-eje{stroke:var(--line);stroke-width:1}
+.g-linea{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.g-punto{fill:var(--accent)}
+.g-punto.ult{stroke:var(--card);stroke-width:2}
+.g-zona{fill:transparent;cursor:pointer}
+.g-txt{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.nota-ej{color:var(--muted);border-left:3px solid var(--line);padding-left:8px}
+.nota-ej a{color:var(--accent);text-decoration:none;font-weight:600}
+.kgs{display:flex;flex-wrap:wrap;gap:6px}
+.kgs .kg-serie{width:4.2rem;text-align:center}
+textarea{font:inherit;width:100%;resize:vertical}
+.aviso-prot{color:var(--orange,#c9730a);padding:0 4px}
+.guia-lista{margin:0;padding-left:1.2rem;display:grid;gap:6px;color:var(--muted);font-size:14px}
+.guia-lista b{color:var(--ink)}

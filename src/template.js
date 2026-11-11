@@ -61,7 +61,7 @@ export function normalize(raw) {
   out.menu.semanas = out.menu.semanas.map((w) => Array.from({ length: 7 }, (_, i) => ({ comida: null, cena: null, ...((w || [])[i] || {}) })));
   out.entreno = { ...base.entreno, ...(d.entreno || {}) };
   if (!Array.isArray(out.entreno.sesiones)) out.entreno.sesiones = [];
-  if (!out.entreno.grupos || typeof out.entreno.grupos !== 'object' || Array.isArray(out.entreno.grupos)) delete out.entreno.grupos;
+  for (const c of ['grupos', 'notas']) if (!out.entreno[c] || typeof out.entreno[c] !== 'object' || Array.isArray(out.entreno[c])) delete out.entreno[c];
   const usados = new Set();                                    // versiones anteriores: una sesión = un día (dia) y sin identificador
   out.entreno.sesiones = out.entreno.sesiones.map((x, i) => {
     const { dia, ...r } = x || {}; r.dias = Array.isArray(r.dias) ? [...new Set(r.dias.filter((n) => n >= 0 && n <= 6))].sort() : (Number.isInteger(dia) ? [dia] : []);
@@ -89,6 +89,7 @@ export function normalize(raw) {
     if (Array.isArray(r.bloques)) { r.bloques = r.bloques.filter((x) => typeof x === 'string' && x); if (!r.bloques.length) delete r.bloques; } else delete r.bloques;
     if (!Array.isArray(r.extras)) delete r.extras;
   }
+  out.pesos = (Array.isArray(out.pesos) ? out.pesos : []).filter((x) => x && /^\d{4}-\d\d-\d\d$/.test(x.f) && Number.isFinite(x.kg) && x.kg > 0).sort((x, y) => (x.f < y.f ? -1 : 1));
   out.platosPropios = (Array.isArray(out.platosPropios) ? out.platosPropios : []).filter((x) => x && typeof x.t === 'string' && x.t.trim() && Array.isArray(x.items)).map((x) => ({ t: x.t.trim(), items: x.items.filter((it) => Array.isArray(it) && it[0]) }));
   out.extrasCompra = (Array.isArray(out.extrasCompra) ? out.extrasCompra : []).filter((x) => x && typeof x.n === 'string' && x.n.trim())
     .map((x, i) => ({ id: String(x.id || 'x' + i), n: x.n.trim(), q: String(x.q || ''), s: SECC.some(([v]) => v === x.s) ? x.s : 'otros', ok: !!x.ok }));

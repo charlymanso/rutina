@@ -262,13 +262,14 @@ export function catalogoEjercicios(data) {
     for (const e of (r.ejExtra || [])) { const k = slug(e.n); if (!k) continue; if (!mapa.has(k)) toma(k, e.n, { extra: true }); const x = mapa.get(k); if (x.extra) { x.s = e.s; x.c = x.c || !!e.c; (diasExtra.get(k) || diasExtra.set(k, []).get(k)).push(f); } }
     for (const [k, g] of Object.entries(r.gym || {})) {
       const x = mapa.get(k) || toma(k, bonito(k), { extra: true });
-      if (g && (g.kg != null || g.hecho)) x.hist.push({ f, kg: g.kg == null ? null : g.kg, s: g.s || null, hecho: !!g.hecho });
+      if (g && (g.kg != null || g.hecho)) x.hist.push({ f, kg: g.kg == null ? null : g.kg, s: g.s || null, hecho: !!g.hecho, ...(Array.isArray(g.kgs) ? { kgs: g.kgs } : {}) });
     }
   }
   const out = [...mapa.values()];
   for (const x of out) {
     x.hist.sort((a, b) => (a.f < b.f ? 1 : -1));   // más reciente primero
     const conPeso = x.hist.find((h) => h.kg != null); x.ultimo = conPeso || null; if (conPeso && !x.c) x.c = true;
+    x.mejor = x.hist.reduce((m, h) => (h.kg != null && (m == null || h.kg > m) ? h.kg : m), null); x.nota = notaEjercicio(data, x.k);
     const fijado = (data.entreno.grupos || {})[x.k];
     if (fijado && GRUPOS_EJ.some(([g]) => g === fijado)) x.grupo = fijado;   // el que elegiste a mano manda
     else if (!x.grupo) {
@@ -290,10 +291,24 @@ export function renombrarEjercicio(data, k, nuevo) {
     if (Array.isArray(r.ejQuitar)) r.ejQuitar = r.ejQuitar.map((x) => (x === k ? k2 : x));
     if (r.gym && k2 !== k && r.gym[k]) { r.gym[k2] = r.gym[k2] ? { ...r.gym[k], ...Object.fromEntries(Object.entries(r.gym[k2]).filter(([, v]) => v != null)) } : r.gym[k]; delete r.gym[k]; }
   }
-  const gs = data.entreno.grupos; if (gs && k2 !== k && gs[k]) { if (!gs[k2]) gs[k2] = gs[k]; delete gs[k]; }
+  for (const gs of [data.entreno.grupos, data.entreno.notas]) if (gs && k2 !== k && gs[k]) { if (!gs[k2]) gs[k2] = gs[k]; delete gs[k]; }
   return k2;
 }
 // Fija a mano el grupo de un ejercicio (null: vuelve al automático)
 export function fijarGrupoEjercicio(data, k, g) { const gs = (data.entreno.grupos = data.entreno.grupos || {}); if (g) gs[k] = g; else delete gs[k]; }
 // Cambia las series/repeticiones de un ejercicio en todas las sesiones que lo llevan
 export function seriesEjercicio(data, k, s) { for (const ses of data.entreno.sesiones) for (const e of ses.ej) if (slug(e.n) === k) e.s = s; }
+
+// Nota y vídeo de un ejercicio (lo que te dijo el fisio, un truco de técnica…): valen en todas las sesiones
+export const notaEjercicio = (data, k) => (data.entreno.notas || {})[k] || null;
+export function ponerNotaEjercicio(data, k, t, v) {
+  const ns = (data.entreno.notas = data.entreno.notas || {}), txt = String(t || '').trim(), url = String(v || '').trim();
+  if (!txt && !url) delete ns[k]; else ns[k] = { ...(txt ? { t: txt } : {}), ...(url ? { v: url } : {}) };
+}
+export const esEnlace = (u) => /^https?:\/\/[^\s]+$/i.test(String(u || '').trim());
+// Mejor peso anotado de un ejercicio antes de una fecha (para avisar de una marca nueva)
+export function mejorPeso(data, k, antesDe) {
+  let m = null;
+  for (const f of Object.keys(data.dias)) { if (antesDe && f >= antesDe) continue; const g = data.dias[f].gym && data.dias[f].gym[k]; if (g && g.kg != null && (m == null || g.kg > m)) m = g.kg; }
+  return m;
+}

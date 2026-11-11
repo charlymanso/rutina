@@ -34,6 +34,7 @@ const ICONS = {
   check: [['path', { d: 'M3 8.5l3.2 3.2L13 4.8' }]],
   cuenta: [['circle', { cx: 12, cy: 8, r: 4 }], ['path', { d: 'M4.5 20c0-3.8 3.4-6 7.5-6s7.5 2.2 7.5 6' }]],
   perfil: [['rect', { x: 3, y: 5, width: 18, height: 14, rx: 3 }], ['circle', { cx: 9, cy: 11, r: 2 }], ['path', { d: 'M6.5 16c.4-1.4 1.4-2 2.5-2s2.1.6 2.5 2M14 10h4M14 14h3' }]],
+  peso: [['path', { d: 'M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM12 9v3l2 1' }]],
   objetivos: [['circle', { cx: 12, cy: 12, r: 9 }], ['circle', { cx: 12, cy: 12, r: 5 }], ['circle', { cx: 12, cy: 12, r: 1.3 }]],
   ingredientes: [['path', { d: 'M4.5 11h15l-1.6 8a2 2 0 0 1-2 1.6H8.1a2 2 0 0 1-2-1.6L4.5 11z' }], ['path', { d: 'M8 11c0-3 1.6-5 4-5s4 2 4 5' }]],
   datos: [['ellipse', { cx: 12, cy: 6, rx: 7, ry: 3 }], ['path', { d: 'M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6' }]],
@@ -321,20 +322,38 @@ function editIngrediente(id, onDone, relleno = {}) {
 const ordenBtns = (i, n, mover, que) => h('span', { class: 'orden' },
   h('button', { type: 'button', class: 'ord-sube', 'aria-label': `Subir ${que}`, disabled: i === 0, onclick: () => mover(i - 1) }, '▲'),
   h('button', { type: 'button', class: 'ord-baja', 'aria-label': `Bajar ${que}`, disabled: i === n - 1, onclick: () => mover(i + 1) }, '▼'));
+/* Gráfica de línea pequeña (una sola serie): evolución de un valor por fechas. Cada punto dice su valor al tocarlo. */
+function graficaLinea(puntos, unidad) {
+  const W = 320, H = 96, mx = 10, my = 12, e = (t, a, txt) => { const n = document.createElementNS(NS, t); for (const k in a) n.setAttribute(k, a[k]); if (txt != null) n.textContent = txt; return n; };
+  const vs = puntos.map((p) => p.v), min = Math.min(...vs), max = Math.max(...vs), rango = max - min || 1, n = puntos.length;
+  const X = (i) => mx + (n === 1 ? (W - 2 * mx) / 2 : i * (W - 2 * mx) / (n - 1)), Y = (v) => H - my - (v - min) / rango * (H - 2 * my - 14);
+  const svg = e('svg', { viewBox: `0 0 ${W} ${H}`, class: 'grafica', role: 'img', 'aria-label': `De ${L.kgTxt(vs[0])} a ${L.kgTxt(vs[n - 1])} ${unidad} en ${n} registros` });
+  svg.append(e('line', { x1: mx, x2: W - mx, y1: H - my, y2: H - my, class: 'g-eje' }), e('polyline', { points: puntos.map((p, i) => `${X(i).toFixed(1)},${Y(p.v).toFixed(1)}`).join(' '), class: 'g-linea' }));
+  const eti = e('text', { x: W - mx, y: 11, 'text-anchor': 'end', class: 'g-txt' }, `${L.kgTxt(vs[n - 1])} ${unidad}`); svg.append(eti);
+  puntos.forEach((p, i) => { const ult = i === n - 1, c = e('circle', { cx: X(i), cy: Y(p.v), r: ult ? 4 : 2.5, class: 'g-punto' + (ult ? ' ult' : '') }), zona = e('circle', { cx: X(i), cy: Y(p.v), r: 14, class: 'g-zona' });
+    zona.append(e('title', {}, `${L.fechaCorta(L.parseISO(p.f))}: ${L.kgTxt(p.v)} ${unidad}`)); const ver = () => { eti.textContent = `${L.fechaCorta(L.parseISO(p.f))} · ${L.kgTxt(p.v)} ${unidad}`; };
+    zona.addEventListener('pointerenter', ver); zona.addEventListener('click', ver); svg.append(c, zona); });
+  return svg;
+}
 /* Un ejercicio con todo su historial: renombrar (conserva los pesos) y cambiar sus series en todas las sesiones. */
 function editarEjercicio(x, despues) {
   const nombre = h('input', { type: 'text', id: 'ej-nom', value: x.n, autocomplete: 'off' }), series = h('input', { type: 'text', id: 'ej-ser', value: x.s || '', placeholder: '4×8' });
   const fijado = (data.entreno.grupos || {})[x.k] || '', grupo = h('select', { id: 'ej-grupo', value: fijado }, [['', `Automático (${(L.GRUPOS_EJ.find(([g]) => g === (fijado ? null : x.grupo)) || [0, 'según la sesión'])[1]})`], ...L.GRUPOS_EJ].map(([v, t]) => h('option', { value: v }, t)));
+  const nt = x.nota || {}, nota = h('textarea', { id: 'ej-nota', rows: 2, placeholder: 'Ej. Evita el dolor; espalda recta' }, nt.t || ''), video = h('input', { type: 'url', id: 'ej-video', inputmode: 'url', placeholder: 'https://…', value: nt.v || '', autocomplete: 'off' });
+  const pesos = x.hist.filter((r) => r.kg != null).slice().reverse();
   const enSesion = x.sesiones.length > 0, fecha = (f) => L.parseISO(f).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-  sheet({ title: 'Ejercicio', save: 'Guardar', body: [field('Nombre', nombre), enSesion ? field('Series y repeticiones', series) : null, field('Grupo', grupo),
+  sheet({ title: 'Ejercicio', save: 'Guardar', body: [field('Nombre', nombre), enSesion ? field('Series y repeticiones', series) : null, field('Grupo', grupo), field('Nota (sale al entrenar)', nota), field('Vídeo (enlace)', video),
+    pesos.length >= 2 ? h('div', { id: 'ej-grafica' }, h('div', { class: 'label', style: 'margin-bottom:4px' }, `Kilos · mejor marca ${L.kgTxt(x.mejor)} kg`), graficaLinea(pesos.map((r) => ({ f: r.f, v: r.kg })), 'kg')) : null,
     enSesion ? h('p', { class: 'mute small' }, `En tu rutina: ${[...new Set(x.sesiones)].join(', ')}.`) : h('p', { class: 'mute small' }, 'Ahora mismo no está en ninguna sesión, pero se conserva su historial por si lo vuelves a hacer.'),
     h('div', { class: 'label' }, x.hist.length ? 'Historial' : 'Aún no hay registros'),
-    x.hist.length ? h('div', { class: 'group', id: 'ej-hist', style: 'max-height:260px;overflow:auto' }, x.hist.map((r) => h('div', { class: 'row', style: 'min-height:40px' }, h('span', { class: 'grow' }, fecha(r.f)), h('span', { class: 'mute num small' }, [r.kg != null ? `${L.kgTxt(r.kg)} kg` : (r.hecho ? 'hecho' : 'sin hacer'), r.s].filter(Boolean).join(' · '))))) : null,
+    x.hist.length ? h('div', { class: 'group', id: 'ej-hist', style: 'max-height:260px;overflow:auto' }, x.hist.map((r) => h('div', { class: 'row', style: 'min-height:40px' }, h('span', { class: 'grow' }, fecha(r.f)), h('span', { class: 'mute num small' }, [r.kg != null ? `${L.kgTxt(r.kg)} kg` : (r.hecho ? 'hecho' : 'sin hacer'), r.kgs ? r.kgs.map((v) => (v == null ? '—' : L.kgTxt(v))).join('/') : null, r.s].filter(Boolean).join(' · '))))) : null,
     h('p', { class: 'mute small' }, 'Si le pones el nombre de otro ejercicio que ya tengas, se juntan sus historiales.')].filter(Boolean),
     onSave: () => {
       const n = nombre.value.trim(); if (!n) return 'Escribe el nombre.'; if (!L.slug(n)) return 'Usa letras o números en el nombre.';
       if (enSesion && series.value.trim() && series.value.trim() !== x.s) L.seriesEjercicio(data, x.k, series.value.trim());
+      if (video.value.trim() && !L.esEnlace(video.value)) return 'El vídeo tiene que ser un enlace que empiece por https://';
       if (grupo.value !== fijado) L.fijarGrupoEjercicio(data, x.k, grupo.value || null);
+      if (nota.value.trim() !== (nt.t || '') || video.value.trim() !== (nt.v || '')) L.ponerNotaEjercicio(data, x.k, nota.value, video.value);
       if (n !== x.n) L.renombrarEjercicio(data, x.k, n);
       commit(); despues && despues();
     } });
@@ -538,6 +557,7 @@ function bienvenida() {
   const aplicar = (base) => {
     const k = Math.max(0, num(kcal.value)), p = Math.max(0, num(prot.value));
     data = base; data.perfil = { ...data.perfil, listo: true, nombre: nombre.value.trim(), objetivos: calcR ? { gym: { kcal: calcR.gym, prot: calcR.prot }, sin: { kcal: calcR.sin, prot: calcR.prot } } : { gym: { kcal: k, prot: p }, sin: { kcal: Math.round(k * 0.92), prot: p } }, ...(cuerpoR ? { cuerpo: cuerpoR } : {}) };
+    data.meta = { ...(data.meta || {}), guia: true };   // primeros pasos: solo para quien empieza
     sheets.slice().forEach((s) => s.close()); commit();
   };
   S.bienvenida = sheet({ title: 'Bienvenido a Rutina', dismissible: false,
@@ -648,17 +668,28 @@ function cambiarComidaHoy(f, d, k) {
 }
 /* Añadir un ejercicio solo a hoy (la sesión del plan no se modifica); se registra su peso como los demás. */
 function anadirEjercicio(f) {
-  const hist = new Set(); data.entreno.sesiones.forEach((x) => x.ej.forEach((e) => hist.add(e.n))); Object.values(data.dias).forEach((r) => (r.ejExtra || []).forEach((e) => hist.add(e.n)));
-  const nom = h('input', { type: 'text', id: 'ej-nombre', list: 'ej-sugerencias', placeholder: 'Ej. Fondos en paralelas', autocomplete: 'off' }), lista = h('datalist', { id: 'ej-sugerencias' }, [...hist].map((n) => h('option', { value: n })));
+  const d = L.parseISO(f), ses = L.sesionDelDia(data, d), hoy = new Set(L.ejerciciosDelDia(data, d).map((e) => L.slug(e.n))), gHoy = ses ? L.grupoSesion(ses.t) : null;
+  const mios = L.catalogoEjercicios(data).filter((x) => !hoy.has(x.k)).sort((a, b) => (b.grupo === gHoy) - (a.grupo === gHoy) || ((b.ultimo || {}).f || '').localeCompare((a.ultimo || {}).f || ''));
+  const nom = h('input', { type: 'text', id: 'ej-nombre', placeholder: 'Escribe o elige uno de los tuyos', autocomplete: 'off' }), sug = h('div', { class: 'group', id: 'ej-sug' });
   const series = h('input', { type: 'number', id: 'ej-series', min: 1, max: 20, step: 1, inputmode: 'numeric', value: '3' }), reps = h('input', { type: 'text', id: 'ej-reps', value: '10', placeholder: 'Ej. 8, 8-12 o 40 s' });
-  const peso = swt(true, () => { peso.setAttribute('aria-checked', String(peso.getAttribute('aria-checked') !== 'true')); }, 'Lleva peso');
-  sheet({ title: 'Añadir ejercicio', save: 'Añadir', body: [field('Ejercicio', nom), lista, h('div', { class: 'pair' }, field('Series', series), field('Repeticiones', reps)),
+  const alternar = (b) => () => b.setAttribute('aria-checked', String(b.getAttribute('aria-checked') !== 'true'));
+  const peso = swt(true, () => alternar(peso)(), 'Lleva peso'), plan = swt(false, () => alternar(plan)(), 'Guardar también en mi sesión'); plan.id = 'ej-plan';
+  const elegir = (x) => { nom.value = x.n; const m = String(x.s || '').match(/^\s*(\d+)\s*[×xX*]\s*(.+?)\s*$/); if (m) { series.value = m[1]; reps.value = m[2]; } peso.setAttribute('aria-checked', String(!!x.c)); pintarSug(); };
+  function pintarSug() {
+    const t = normalizar(nom.value.trim()), exacto = mios.some((x) => normalizar(x.n) === t), vis = exacto ? [] : (t ? mios.filter((x) => normalizar(x.n).includes(t)) : mios.filter((x) => x.grupo === gHoy)).slice(0, 4);
+    sug.hidden = !vis.length; sug.replaceChildren(...vis.map((x) => h('button', { type: 'button', class: 'row tap', onclick: () => elegir(x) }, h('div', { class: 'grow' }, x.n, h('div', { class: 'sub num' }, [x.s, x.ultimo ? `${L.kgTxt(x.ultimo.kg)} kg` : ''].filter(Boolean).join(' · '))), h('span', { class: 'chev' }, '+'))));
+  }
+  nom.addEventListener('input', pintarSug); pintarSug();
+  sheet({ title: 'Añadir ejercicio', save: 'Añadir', body: [field('Ejercicio', nom), sug, h('div', { class: 'pair' }, field('Series', series), field('Repeticiones', reps)),
     h('div', { class: 'row', style: 'padding:0;min-height:0' }, h('div', { class: 'grow' }, 'Lleva peso', h('div', { class: 'sub' }, 'Para registrar los kilos que usas.')), peso),
-    h('p', { class: 'mute small' }, 'Solo se añade a hoy: tu sesión del plan no cambia.')],
+    ses ? h('div', { class: 'row', style: 'padding:0;min-height:0' }, h('div', { class: 'grow' }, 'Guardar también en mi sesión', h('div', { class: 'sub' }, `Si no, solo se añade a hoy. Sesión: ${ses.t}.`)), plan) : null].filter(Boolean),
   onSave: () => {
     const n = nom.value.trim(), sr = parseInt(series.value, 10), rp = reps.value.trim(); if (!n) return 'Escribe el nombre del ejercicio.'; if (!(sr >= 1)) return 'Escribe cuántas series.'; if (!rp) return 'Escribe las repeticiones.';
-    if (L.ejerciciosDelDia(data, L.parseISO(f)).some((e) => L.slug(e.n) === L.slug(n))) return 'Ese ejercicio ya está en el entreno de hoy.';
-    const r = diaReg(f); (r.ejExtra ||= []).push({ n, s: `${sr}×${rp}`, c: peso.getAttribute('aria-checked') === 'true' }); commit(); if (S.entrenoGrande) S.entrenoGrande();
+    if (hoy.has(L.slug(n))) return 'Ese ejercicio ya está en el entreno de hoy.';
+    const nuevo = { n, s: `${sr}×${rp}`, c: peso.getAttribute('aria-checked') === 'true' }, r = diaReg(f);
+    if (ses && plan.getAttribute('aria-checked') === 'true') { const real = data.entreno.sesiones.find((y) => y.id === ses.id); if (real && !real.ej.some((e) => L.slug(e.n) === L.slug(n))) real.ej.push(nuevo); if (r.ejQuitar) r.ejQuitar = r.ejQuitar.filter((k) => k !== L.slug(n)); toast(`Guardado en “${ses.t}”.`); }
+    else (r.ejExtra ||= []).push(nuevo);
+    commit(); if (S.entrenoGrande) S.entrenoGrande();
   } });
 }
 /* Sumar otra sesión (un bloque: Brazo, Cardio…) al entreno de hoy: sale todo como un solo entreno y el plan no cambia. */
@@ -682,11 +713,18 @@ function abrirEntrenoHoy(f) {
     const actual = x.s || e.s, m = String(actual).match(/^\s*(\d+)\s*[×xX*]\s*(.+?)\s*$/);
     const series = h('input', { type: 'number', id: 'ser-series', min: 1, max: 20, step: 1, inputmode: 'numeric', value: m ? m[1] : '' }), reps = h('input', { type: 'text', id: 'ser-reps', value: m ? m[2] : String(actual), placeholder: 'Ej. 8, 8-12 o 40 s' });
     const plan = swt(false, () => { plan.setAttribute('aria-checked', String(plan.getAttribute('aria-checked') !== 'true')); }, 'Cambiar también en mi plan');
+    // Peso de cada serie (opcional): si subes o bajas entre series
+    const porSerie = h('div', { class: 'kgs', id: 'ser-kgs' }), valores = Array.isArray(x.kgs) ? x.kgs.slice() : [];
+    const pintarKgs = () => { const n = Math.min(12, Math.max(0, parseInt(series.value, 10) || 0)); porSerie.replaceChildren(...Array.from({ length: n }, (_, i) => h('input', { type: 'text', inputmode: 'decimal', class: 'kg-serie', 'aria-label': `Kilos de la serie ${i + 1}`, placeholder: String(i + 1), value: valores[i] != null ? L.kgTxt(valores[i]) : '', oninput: (ev) => { const v = ev.target.value.trim(); valores[i] = v === '' ? null : num(v, NaN); } }))); };
+    series.addEventListener('input', pintarKgs); pintarKgs();
     sheet({ title: e.n, save: 'Guardar', body: [h('div', { class: 'pair' }, field('Series', series), field('Repeticiones', reps)),
+      e.c ? h('div', {}, h('div', { class: 'label', style: 'margin-bottom:6px' }, 'Kilos de cada serie (opcional)'), porSerie) : null,
       e.extra ? null : h('div', { class: 'row', style: 'padding:0;min-height:0' }, h('div', { class: 'grow' }, 'Cambiar también en mi plan', h('div', { class: 'sub' }, `Si no, solo cambia hoy. Plan actual: ${e.s}.`)), plan)],
       onSave: () => {
         const sr = parseInt(series.value, 10), rp = reps.value.trim(); if (!(sr >= 1)) return 'Escribe cuántas series.'; if (!rp) return 'Escribe las repeticiones.';
         const nuevo = `${sr}×${rp}`;
+        if (e.c) { const ks = valores.slice(0, sr); if (ks.some((v) => v != null && !(Number.isFinite(v) && v >= 0 && v <= 999))) return 'Escribe los kilos de cada serie como número.';
+          const llenos = ks.filter((v) => v != null); if (llenos.length) setEj(f, k, { kgs: Array.from({ length: sr }, (_, i) => (ks[i] == null ? null : Math.round(ks[i] * 100) / 100)), kg: Math.max(...llenos) }); else if (x.kgs) setEj(f, k, { kgs: null }); }
         if (!e.extra && plan.getAttribute('aria-checked') === 'true') { const real = (e.bloque ? data.entreno.sesiones.find((y) => y.id === e.bloque) : ses).ej.find((y) => L.slug(y.n) === k); if (real) real.s = nuevo; guardar(k, { s: null }); commit(); toast('Cambiado en tu plan.'); } else guardar(k, { s: nuevo === e.s ? null : nuevo });
       },
       extra: x.s ? h('button', { class: 'btn danger', id: 'ser-volver', onclick: () => { guardar(k, { s: null }); sheets.slice(-1)[0].close(); } }, 'Volver al plan') : null });
@@ -698,7 +736,7 @@ function abrirEntrenoHoy(f) {
     toast(`“${e.n}” quitado de hoy.`, () => { const q = diaReg(f); if (antes.extra) q.ejExtra = antes.extra; else delete q.ejExtra; if (antes.quitar) q.ejQuitar = antes.quitar; else delete q.ejQuitar; if (antes.reg) { q.gym = q.gym || {}; q.gym[k] = antes.reg; } commit(); pintar(); });
   };
   const fichas = (ses, reg, lista) => lista.map((e) => {
-    const k = L.slug(e.n), x = reg[k] || {}, u = e.c ? L.ultimoPeso(data, k, f) : null;
+    const k = L.slug(e.n), x = reg[k] || {}, u = e.c ? L.ultimoPeso(data, k, f) : null, nota = L.notaEjercicio(data, k);
     const kgActual = x.kg != null ? x.kg : (u ? u.kg : null), sugerido = x.kg == null && !!u;     // si hoy no has puesto nada, se recuerda el de la última vez
     const mover = (delta) => guardar(k, { kg: Math.max(0, Math.round(((kgActual ?? 0) + delta) * 100) / 100) });
     const kg = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off', id: 'kg-' + k, class: 'kg' + (sugerido ? ' sugerido' : ''), 'aria-label': 'Kilos de ' + e.n, placeholder: '—', value: kgActual != null ? L.kgTxt(kgActual) : '', onchange: (ev) => {
@@ -707,14 +745,16 @@ function abrirEntrenoHoy(f) {
     return deslizable(h('div', { class: 'ficha' + (x.hecho ? ' hecho' : ''), id: 'ficha-' + k },
       h('div', { class: 'ficha-top' },
         h('button', { class: 'chk', id: 'hecho-' + k, 'aria-pressed': String(!!x.hecho), 'aria-label': (x.hecho ? 'Desmarcar ' : 'Marcar como hecho: ') + e.n,
-          onclick: () => guardar(k, { hecho: !x.hecho, ...(!x.hecho && x.kg == null && u ? { kg: u.kg } : {}) }) }, icon('check')),   // al marcarlo se guarda el peso recordado
+          onclick: () => { const mejor = L.mejorPeso(data, k, f); guardar(k, { hecho: !x.hecho, ...(!x.hecho && x.kg == null && u ? { kg: u.kg } : {}) }); if (!x.hecho && mejor != null && kgActual != null && kgActual > mejor) toast(`Nueva marca en ${e.n}: ${L.kgTxt(kgActual)} kg`); } }, icon('check')),   // al marcarlo se guarda el peso recordado
         h('div', { class: 'grow' }, h('div', { class: 'ficha-nombre' }, e.n, e.extra ? h('span', { class: 'tag' }, 'Extra') : null),
           h('button', { type: 'button', class: 'esquema', id: 'esq-' + k, 'aria-label': `Cambiar series y repeticiones de ${e.n}`, onclick: () => editarSeries(ses, e, k, x) }, h('span', { class: 'num' }, x.s || e.s), x.s && !e.extra ? h('span', { class: 'mute small' }, ` · plan ${e.s}`) : null, h('span', { class: 'chev' }, ' ›'))),
         h('button', { type: 'button', class: 'x quitar-ej', id: 'quitar-' + k, 'aria-label': 'Quitar ' + e.n + ' de hoy', onclick: () => quitarEj(e, k) }, '×')),
       h('div', { class: 'ficha-campos' },
         e.c ? h('div', { class: 'campo' }, h('span', { class: 'label' }, 'Peso'), h('div', { class: 'kgbox' }, h('button', { type: 'button', class: 'mas', 'aria-label': 'Quitar 2,5 kg', onclick: () => mover(-2.5) }, '−'), kg, h('span', { class: 'kgu' }, 'kg'), h('button', { type: 'button', class: 'mas', 'aria-label': 'Sumar 2,5 kg', onclick: () => mover(2.5) }, '+'))) : null,
         ),
-      u ? h('div', { class: 'mute small' }, `${sugerido ? 'Peso de la última vez' : 'Última vez'}: ${L.kgTxt(u.kg)} kg · ${L.fechaCorta(L.parseISO(u.f))}`) : null), () => quitarEj(e, k), 'Quitar', 'ficha-sw');
+      Array.isArray(x.kgs) && x.kgs.some((v) => v != null) ? h('div', { class: 'mute small num', id: 'kgs-' + k }, 'Por serie: ' + x.kgs.map((v) => (v == null ? '—' : L.kgTxt(v))).join(' · ') + ' kg') : null,
+      u ? h('div', { class: 'mute small' }, `${sugerido ? 'Peso de la última vez' : 'Última vez'}: ${L.kgTxt(u.kg)} kg · ${L.fechaCorta(L.parseISO(u.f))}`) : null,
+      nota ? h('div', { class: 'nota-ej small', id: 'nota-' + k }, nota.t || '', nota.t && nota.v ? ' · ' : '', nota.v && L.esEnlace(nota.v) ? h('a', { href: nota.v, target: '_blank', rel: 'noopener' }, 'Ver vídeo') : null) : null), () => quitarEj(e, k), 'Quitar', 'ficha-sw');
   });
   const quitarBloque = (b, ejsBloque) => {
     const r = diaReg(f), antes = { bl: r.bloques ? [...r.bloques] : undefined, qu: r.bloquesQuitar ? [...r.bloquesQuitar] : undefined }, regs = {};
@@ -771,6 +811,14 @@ function recordatorioCuenta() {
     h('button', { class: 'btn', onclick: () => irAuth('crear') }, 'Crear cuenta'),
     h('button', { class: 'btn plain', 'aria-label': 'Ocultar este aviso', onclick: () => { data.meta = data.meta || {}; data.meta.ocultarCuenta = true; guardarLocal(); } }, '✕'));
 }
+/* Primeros pasos: una tarjeta corta para quien acaba de empezar; se cierra y no vuelve. */
+function primerosPasos() {
+  if (!(data.meta || {}).guia) return null;
+  const paso = (t, d) => h('li', {}, h('b', {}, t), ' ', d);
+  return h('section', { class: 'card guia', id: 'guia' }, h('h2', { class: 'sec' }, 'Primeros pasos'),
+    h('ol', { class: 'guia-lista' }, paso('Menú.', 'Toca un plato para cambiarlo o crear el tuyo.'), paso('Hoy.', 'Marca lo que vas haciendo; toca una comida si hoy comes otra cosa.'), paso('Entreno.', 'Crea tus sesiones y apunta los kilos de cada ejercicio.'), paso('¿Comes con alguien?', 'Dilo en Ajustes › Perfil › Personas en casa.')),
+    h('button', { class: 'btn sec', id: 'guia-cerrar', style: 'align-self:flex-start', onclick: () => { delete data.meta.guia; guardarLocal(); } }, 'Entendido'));
+}
 function viewHoy() {
   const d = L.hoy(), f = L.iso(d), dm = L.diaMenu(data, d), hechos = L.hechosDe(data, f), slots = [];
   for (const [c, nombre] of [['desayuno', 'Desayuno'], ['media', 'Media mañana'], ['comida', 'Comida'], ['merienda', 'Merienda'], ['cena', 'Cena']]) {
@@ -796,7 +844,7 @@ function viewHoy() {
 
   return h('div', { class: 'page' },
     h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, saludo()), h('p', { class: 'subtitle' }, L.fechaLarga(d)))),
-    avisoInstalar(), recordatorioCuenta(),
+    avisoInstalar(), recordatorioCuenta(), primerosPasos(),
     h('div', { class: 'cols' },
       h('div', { class: 'stack' }, slots.length ? h('div', { class: 'group' }, slots.map((s) => (s.k === 'gym' ? deslizable(slotEl(s, f, sig && sig.k, !!hechos[s.k]), () => quitarEntrenoHoy(f, d), 'Quitar', 'swipe-slot') : slotEl(s, f, sig && sig.k, !!hechos[s.k])))) :
         h('div', { class: 'card empty' }, h('p', {}, 'Hoy no tienes nada en el plan.'), h('button', { class: 'btn', onclick: () => go('semana') }, 'Preparar el menú')), slots.length ? h('p', { class: 'mute small', style: 'padding:0 4px' }, 'Toca una comida para cambiar el plato o las cantidades de hoy.') : null, barraEntreno(d, f), extrasCard(f)),
@@ -826,6 +874,8 @@ function viewSemana() {
   const lun = L.addDays(L.lunesDe(L.hoy()), S.semSel * 7), w = L.semanaIdx(data, lun), semana = data.menu.semanas[w], fh = L.iso(L.hoy()), n = data.menu.semanas.length;
   const dias = semana.map((_, i) => { const d = L.addDays(lun, i); return { d, i, t: L.totalDia(data, d, { extras: false, cambios: false }), o: L.objetivo(data, d) }; });
   const conPlan = dias.filter((x) => x.t && x.t.k > 0), media = conPlan.length ? { k: conPlan.reduce((a, x) => a + x.t.k, 0) / conPlan.length, p: conPlan.reduce((a, x) => a + x.t.p, 0) / conPlan.length } : null;
+  const protObj = dias.reduce((a, x) => a + (x.o.prot || 0), 0) / 7, otra = n > 1 ? (w + 1) % n : null;
+  const copiarSemana = () => confirmSheet(`¿Copiar a la semana ${otra + 1}?`, `La semana ${otra + 1} del ciclo quedará igual que esta. Lo que tenía se reemplaza.`, 'Copiar', () => { const antes = clone(data.menu.semanas[otra]); data.menu.semanas[otra] = clone(semana); commit(); toast(`Semana ${otra + 1} copiada.`, () => { data.menu.semanas[otra] = antes; commit(); }); });
   return h('div', { class: 'page' },
     h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, 'Menú'), h('p', { class: 'subtitle' }, n > 1 ? `Semana ${w + 1} de ${n} del ciclo` : 'Se repite cada semana')),
       h('div', { class: 'row', style: 'gap:10px;flex-wrap:wrap;padding:0' }, h('button', { class: 'btn sec', id: 'recomendar', onclick: () => recomendarMenu(lun, semana) }, 'Recomendar menú'), h('button', { class: 'btn sec', id: 'comidas-horarios', onclick: abrirComidasHorarios }, 'Comidas y horarios'), seg([[0, 'Esta semana'], [1, 'La que viene']], S.semSel, (v) => { S.semSel = v; render(); }))),
@@ -833,12 +883,14 @@ function viewSemana() {
       h('div', { class: 'metric' }, h('span', { class: 'label' }, 'Media diaria'), h('b', { class: 'num', id: 'media-kcal' }, `${L.miles(media.k)} kcal`)),
       h('div', { class: 'metric' }, h('span', { class: 'label' }, 'Proteína media'), h('b', { class: 'num', id: 'media-prot' }, `${L.miles(media.p)} g`)),
       h('div', { class: 'metric' }, h('span', { class: 'label' }, 'Objetivo medio'), h('b', { class: 'num' }, `${L.miles(dias.reduce((a, x) => a + x.o.kcal, 0) / 7)} kcal`))) : null,
+    media && protObj && media.p < protObj * 0.9 ? h('p', { class: 'small aviso-prot', id: 'aviso-prot' }, `Tu menú da de media ${L.miles(media.p)} g de proteína y tu objetivo son ${L.miles(protObj)} g. Sube las raciones de carne, pescado, huevo o lácteos.`) : null,
     h('p', { class: 'mute small' }, (L.hogar(data).length ? 'Toca un plato para editarlo y, si quieres, repetirlo en otros días. Las cantidades son las del plato completo; las calorías que ves son solo las tuyas.' : 'Toca un plato para editarlo y, si quieres, repetirlo en otros días. Las cantidades son por persona.')),
     h('div', { class: 'group' }, dias.map(({ d, i, t, o }) => {
       const pct = t && o.kcal ? Math.min(100, t.k / o.kcal * 100) : 0, pasa = t && o.kcal && t.k > o.kcal * 1.05;
       return h('div', { class: 'dayrow' + (L.iso(d) === fh ? ' hoy' : '') }, h('div', { class: 'dn' }, L.DIAS[i], h('small', {}, L.fechaCorta(d) + (L.esDiaGym(data, d) ? ' · con entreno' : '')),
         t && t.k > 0 ? h('div', { class: 'dtot num' }, h('span', { class: pasa ? 'over' : '' }, `${L.miles(t.k)} kcal`), h('span', { class: 'mute', style: 'margin-left:8px;white-space:nowrap' }, `P ${L.miles(t.p)} g`), h('div', { class: 'bar' + (pasa ? ' over' : '') }, h('i', { style: `width:${pct}%` }))) : null),
-        h('div', { class: 'meals' }, ['desayuno', 'media', 'comida', 'merienda', 'cena'].filter((m) => !L.FIJAS.includes(m) || L.fijoOn(data, m)).map((m) => (L.FIJAS.includes(m) ? fijaBtn(semana, i, m, d) : platoBtn(semana, i, m))))); })));
+        h('div', { class: 'meals' }, ['desayuno', 'media', 'comida', 'merienda', 'cena'].filter((m) => !L.FIJAS.includes(m) || L.fijoOn(data, m)).map((m) => (L.FIJAS.includes(m) ? fijaBtn(semana, i, m, d) : platoBtn(semana, i, m))))); })),
+    otra != null ? h('button', { class: 'btn plain', id: 'copiar-semana', style: 'align-self:flex-start', onclick: copiarSemana }, `Copiar esta semana a la semana ${otra + 1}`) : null);
 }
 
 function anadirCompra() {
@@ -908,6 +960,16 @@ function viewAjustes() {
           h('span', { class: 'num', id: 'personas-n' }, String(1 + L.hogar(data).length)),
           h('button', { 'aria-label': 'Más personas', id: 'personas-mas', onclick: () => { const lista = (data.perfil.hogar = L.hogar(data)); if (lista.length >= 8) return; const n = lista.length + 2; lista.push({ id: 'h' + Date.now().toString(36), n: `Persona ${n}`, f: 0.7, comidas: ['comida', 'cena'] }); commit(); if (lista.length === 1) toast('Ahora puedes ajustar su ración en «Con quién comes».'); } }, '+')),
           'Si comes con alguien, súmalo y ajustas su ración y qué comidas compartís.')));
+    case 'peso': {
+      const ps = data.pesos || [], hoyF = L.iso(L.hoy()), ult = ps[ps.length - 1], kg = h('input', { type: 'text', inputmode: 'decimal', id: 'peso-kg', placeholder: ult ? L.kgTxt(ult.kg) : 'Ej. 78,5', autocomplete: 'off', style: 'max-width:8rem' });
+      const anotar = () => { const v = num(kg.value.trim(), NaN); if (!(v >= 20 && v <= 400)) return toast('Escribe tu peso en kilos, por ejemplo 78,5.'); data.pesos = ps.filter((x) => x.f !== hoyF).concat({ f: hoyF, kg: Math.round(v * 10) / 10 }).sort((a, b) => (a.f < b.f ? -1 : 1)); commit(); };
+      const dif = ps.length >= 2 ? Math.round((ult.kg - ps[0].kg) * 10) / 10 : null;
+      return subpagina('Peso corporal', 'Anótalo de vez en cuando, por ejemplo una vez a la semana, para ver si el plan funciona',
+        h('div', { class: 'row', style: 'padding:0;gap:10px;min-height:0' }, kg, h('span', { class: 'mute' }, 'kg'), h('button', { class: 'btn', id: 'peso-anotar', onclick: anotar }, 'Anotar hoy')),
+        ps.length >= 2 ? h('div', { id: 'peso-grafica' }, h('div', { class: 'label', style: 'margin-bottom:4px' }, `${dif > 0 ? '+' : ''}${L.kgTxt(dif)} kg desde el ${L.fechaCorta(L.parseISO(ps[0].f))}`), graficaLinea(ps.map((x) => ({ f: x.f, v: x.kg })), 'kg')) : null,
+        ps.length ? h('div', { class: 'group', id: 'peso-lista' }, ps.slice().reverse().slice(0, 12).map((x) => deslizable(h('div', { class: 'row', style: 'min-height:42px' }, h('span', { class: 'grow' }, L.parseISO(x.f).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })), h('span', { class: 'num' }, `${L.kgTxt(x.kg)} kg`),
+          h('button', { class: 'x', style: 'color:var(--faint);font-size:20px', 'aria-label': 'Borrar', onclick: () => sacar(data.pesos, data.pesos.indexOf(x), `${L.kgTxt(x.kg)} kg`, commit) }, '×')), () => sacar(data.pesos, data.pesos.indexOf(x), `${L.kgTxt(x.kg)} kg`, commit)))) : h('p', { class: 'mute small', id: 'peso-vacio' }, 'Aún no has anotado ningún peso.'));
+    }
     case 'objetivos': return subpagina('Objetivos diarios', 'Tus calorías y tu proteína',
       h('div', { class: 'card', style: 'gap:10px' }, h('div', {}, h('b', {}, 'Calcúlalos por ti'), h('p', { class: 'mute small' }, 'A partir de tu edad, peso, altura y actividad, con las mismas fórmulas que Macrómetro.')), h('button', { class: 'btn', id: 'calcular-objetivos', style: 'align-self:flex-start', onclick: () => abrirObjetivo() }, 'Calcular mis objetivos')),
       grupo('A mano', rowOf('Día con entreno · calorías', numField(o.gym.kcal, (v) => { o.gym.kcal = v; commit(); })), rowOf('Día con entreno · proteína (g)', numField(o.gym.prot, (v) => { o.gym.prot = v; commit(); })),
@@ -971,7 +1033,7 @@ function viewAjustes() {
     default: return h('div', { class: 'page' },
       h('div', {}, h('h1', { class: 'title' }, 'Ajustes')),
       grupo(null, Nube.nubeActiva() ? filaAj('cuenta', 'cuenta', '#0a84ff', 'Cuenta', u ? u.email : 'Sin iniciar sesión') : null, filaAj('perfil', 'perfil', '#8e8e93', 'Perfil', p.nombre || 'Tu nombre y tu ciudad')),
-      grupo(null, filaAj('objetivos', 'objetivos', '#ff9f0a', 'Objetivos diarios', `${L.miles(o.gym.kcal)} / ${L.miles(o.sin.kcal)} kcal · ${o.gym.prot} g de proteína`)),
+      grupo(null, filaAj('objetivos', 'objetivos', '#ff9f0a', 'Objetivos diarios', `${L.miles(o.gym.kcal)} / ${L.miles(o.sin.kcal)} kcal · ${o.gym.prot} g de proteína`), filaAj('peso', 'peso', '#34c759', 'Peso corporal', (data.pesos || []).length ? `${L.kgTxt(data.pesos[data.pesos.length - 1].kg)} kg · ${L.fechaCorta(L.parseISO(data.pesos[data.pesos.length - 1].f))}` : 'Anota tu peso para ver tu evolución')),
       grupo(null, ...(L.hogar(data).length ? [filaAj('hogar', 'hogar', '#34c759', 'Con quién comes', `Tú y ${nombresHogar()}`)] : []), filaAj('platos', 'platos', '#ff6b35', 'Platos', data.platosPropios.length ? `${data.platosPropios.length} ${data.platosPropios.length === 1 ? 'plato guardado' : 'platos guardados'}` : 'Crea tus platos con ingredientes')),
       grupo(null, filaAj('ingredientes', 'ingredientes', '#30b0c7', 'Ingredientes', `${n} ${n === 1 ? 'registrado' : 'registrados'}`)),
       grupo(null, filaAj('ejercicios', 'ejercicios', '#ff453a', 'Ejercicios', `${L.catalogoEjercicios(data).length} con sus pesos y series`)),
