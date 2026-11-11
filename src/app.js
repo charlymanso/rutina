@@ -526,7 +526,7 @@ function cambiarComidaHoy(f, d, k) {
   const mia = (id, q) => { const x = L.miCantidad(data, id, q, k); return L.ing(data, id).u === 'ud' ? x : Math.round(x); }, memoria = new Map();
   const suyas = (items) => (items || []).map(([id, q]) => [id, mia(id, q)]);
   const recordar = (items) => (items || []).forEach(([id, q]) => memoria.set(id, [mia(id, q), q]));
-  const totales = (items) => items.map(([id, q]) => { const m = memoria.get(id); return [id, m && Math.abs(m[0] - q) < 1e-9 ? m[1] : L.cantidadTotal(data, id, q, k)]; });
+  const totales = (items) => items.map(([id, q]) => { const m = memoria.get(id); const t = m && Math.abs(m[0] - q) < 1e-9 ? m[1] : L.cantidadTotal(data, id, q, k); return [id, L.ing(data, id).u === 'ud' ? t : Math.round(t)]; });   // en gramos, sin decimales
   recordar(actual.items);
   const w = clone({ t: actual.libre ? 'Comida libre' : actual.t, items: suyas(actual.items), libre: !!actual.libre });
   let origen = clone(w.items), origenTot = new Map(memoria), factor = cambiado ? null : 1;
