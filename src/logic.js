@@ -312,3 +312,21 @@ export function mejorPeso(data, k, antesDe) {
   for (const f of Object.keys(data.dias)) { if (antesDe && f >= antesDe) continue; const g = data.dias[f].gym && data.dias[f].gym[k]; if (g && g.kg != null && (m == null || g.kg > m)) m = g.kg; }
   return m;
 }
+
+// ---- sincronización por partes ----
+// Si cambias cosas en dos dispositivos, se juntan: cada parte (menú, entreno, cada día…) se queda con la versión del lado que la cambió.
+// Solo hay conflicto de verdad si la MISMA parte cambió en los dos lados.
+export const PARTES = [['perfil', 'Perfil y objetivos'], ['ingredientes', 'Ingredientes'], ['menu', 'Menú'], ['platosPropios', 'Platos'], ['extrasCompra', 'Lista de la compra'], ['entreno', 'Entrenos'], ['compra', 'Compra marcada'], ['pesos', 'Peso corporal']];
+const canon = (x) => (Array.isArray(x) ? '[' + x.map(canon).join(',') + ']' : x && typeof x === 'object' ? '{' + Object.keys(x).sort().filter((k) => x[k] !== undefined).map((k) => JSON.stringify(k) + ':' + canon(x[k])).join(',') + '}' : JSON.stringify(x === undefined ? null : x));
+export function huella(x) { if (x === undefined) return '-'; const t = canon(x); let a = 5381, b = 52711; for (let i = 0; i < t.length; i++) { const c = t.charCodeAt(i); a = (a * 33) ^ c; b = (b * 33) ^ c; } return (a >>> 0).toString(36) + (b >>> 0).toString(36) + t.length.toString(36); }
+export function huellas(d) { return { s: Object.fromEntries(PARTES.map(([k]) => [k, huella(d[k])])), d: Object.fromEntries(Object.entries(d.dias || {}).map(([f, r]) => [f, huella(r)])) }; }
+// base: huellas de la última versión sincronizada. preferir: 'local' | 'nube' para las partes en conflicto (sin él, se queda lo local y se avisa).
+export function fusionar(local, remoto, base, preferir) {
+  if (!base || !base.s || !base.d) return null;
+  const out = { ...remoto, ...local }, conflictos = [];
+  const elige = (l, r, hb, nombre) => { const hl = huella(l), hr = huella(r); if (hl === hr || hr === hb) return l; if (hl === hb) return r; conflictos.push(nombre); return preferir === 'nube' ? r : l; };
+  for (const [k, nombre] of PARTES) { const v = elige(local[k], remoto[k], base.s[k], nombre); if (v === undefined) delete out[k]; else out[k] = v; }
+  out.dias = {};
+  for (const f of new Set([...Object.keys(local.dias || {}), ...Object.keys(remoto.dias || {})])) { const v = elige((local.dias || {})[f], (remoto.dias || {})[f], f in base.d ? base.d[f] : '-', 'Día ' + f); if (v !== undefined) out.dias[f] = v; }
+  return { datos: out, conflictos };
+}

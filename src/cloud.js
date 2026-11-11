@@ -120,6 +120,9 @@ export async function bajar() {
   const rows = await api(`/rest/v1/datos?select=contenido,actualizado&user_id=eq.${sesion.user.id}`, { token: t });
   return rows && rows[0] ? rows[0] : null;
 }
+// Copias automáticas (las crea la base de datos): lista de días y contenido de un día
+export async function copias() { const t = await tokenValido(); return (await api(`/rest/v1/copias?select=dia&user_id=eq.${sesion.user.id}&order=dia.desc`, { token: t })) || []; }
+export async function copia(dia) { const t = await tokenValido(), rows = await api(`/rest/v1/copias?select=contenido&user_id=eq.${sesion.user.id}&dia=eq.${encodeURIComponent(dia)}`, { token: t }); return rows && rows[0] ? rows[0].contenido : null; }
 // baseTs = marca de la última versión que conocíamos; si en la nube ya hay otra, lanza conflicto.
 export async function subir(contenido, baseTs) {
   const t = await tokenValido(), id = sesion.user.id, prefer = { Prefer: 'return=representation' };

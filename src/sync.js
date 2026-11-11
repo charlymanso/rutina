@@ -2,6 +2,7 @@
 // si hay cambios en los dos lados, pregunta cuáles conservar.
 import * as Nube from './cloud.js';
 import { normalize } from './template.js';
+import { huellas, fusionar } from './logic.js';
 
 let ctx = null, timer = null, enCurso = false, pendiente = false;
 export const init = (c) => { ctx = c; };
@@ -21,10 +22,17 @@ export async function sincronizar() {
   finally { enCurso = false; if (pendiente) { pendiente = false; sincronizar(); } }
 }
 
-function marcar(d, ts) { d.meta.base = ts; d.meta.sucio = false; d.meta.ultima = Date.now(); return ctx.guardar(); }
+const igualado = (d) => normalize(JSON.parse(JSON.stringify(limpio(d))));   // misma forma en los dos lados antes de comparar
+function marcar(d, ts) { d.meta.base = ts; d.meta.sucio = false; d.meta.ultima = Date.now(); d.meta.huellas = huellas(igualado(d)); return ctx.guardar(); }
+// Junta lo de este dispositivo con lo de la nube, parte por parte. Devuelve null si no se puede (dispositivo sin huellas de la última sincronización).
+function juntar(d, remoto, preferir) {
+  const m = fusionar(igualado(d), normalize(remoto.contenido), d.meta.huellas, preferir); if (!m) return null;
+  const nuevo = normalize(m.datos); nuevo.perfil.listo = true; nuevo.meta = { ...d.meta }; return { nuevo, conflictos: m.conflictos };
+}
+async function subirJunto(nuevo, remoto) { ctx.setData(nuevo); ctx.render(); await marcar(nuevo, (await Nube.subir(limpio(nuevo), remoto.actualizado)).actualizado); }
 function aplicar(remoto) {
   const nuevo = normalize(remoto.contenido); nuevo.perfil.listo = true;
-  nuevo.meta = { base: remoto.actualizado, sucio: false, ultima: Date.now() };
+  nuevo.meta = { base: remoto.actualizado, sucio: false, ultima: Date.now(), huellas: huellas(nuevo) };
   ctx.setData(nuevo); ctx.guardar(); ctx.render();
 }
 
@@ -33,7 +41,12 @@ async function ciclo() {
   const remoto = await Nube.bajar();
   if (!remoto) { if (sinEmpezar(d)) return; return marcar(d, (await Nube.subir(limpio(d), null)).actualizado); }
   if (!d.meta.base) return sinEmpezar(d) ? aplicar(remoto) : ctx.onConflicto({ remoto });   // primera vez en este dispositivo
-  if (remoto.actualizado !== d.meta.base) return d.meta.sucio ? ctx.onConflicto({ remoto }) : aplicar(remoto);
+  if (remoto.actualizado !== d.meta.base) {
+    if (!d.meta.sucio) return aplicar(remoto);
+    const m = juntar(d, remoto);   // cambios en los dos lados: se juntan si no tocan la misma parte
+    if (!m || m.conflictos.length) return ctx.onConflicto({ remoto, partes: m ? m.conflictos : null });
+    try { return await subirJunto(m.nuevo, remoto); } catch (e) { if (e.conflicto) return ciclo(); throw e; }
+  }
   if (d.meta.sucio) {
     try { await marcar(d, (await Nube.subir(limpio(d), d.meta.base)).actualizado); }
     catch (e) { if (e.conflicto) return ciclo(); throw e; }
@@ -43,6 +56,8 @@ async function ciclo() {
 // Respuesta a la pregunta de conflicto: 'nube' conserva lo de la cuenta, 'local' lo de este ordenador.
 export async function resolver(eleccion, remoto) {
   const d = ctx.getData(); d.meta = d.meta || {};
+  const m = d.meta.base ? juntar(d, remoto, eleccion) : null;   // solo las partes en conflicto siguen tu elección; el resto se junta
+  if (m) { estado('sincronizando'); try { await subirJunto(m.nuevo, remoto); estado('ok'); } catch (e) { estado(e.offline ? 'offline' : 'error', e.message); } return; }
   if (eleccion === 'nube') return aplicar(remoto);
   estado('sincronizando');
   try { await marcar(d, (await Nube.subir(limpio(d), remoto.actualizado)).actualizado); estado('ok'); }

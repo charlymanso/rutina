@@ -247,6 +247,20 @@ assert.equal(L.esVersionNueva('0.1.10', 'v0.1.9'), false);
     L.renombrarEjercicio(m, 'cosa-nueva', 'Cosa vieja'); assert.equal(m.entreno.grupos['cosa-vieja'], 'pull'); L.fijarGrupoEjercicio(m, 'cosa-vieja', null); assert.ok(!('cosa-vieja' in m.entreno.grupos));
     assert.ok(!('grupos' in normalize({ entreno: { grupos: [1] } }).entreno)); assert.deepEqual(normalize({ entreno: { grupos: { a: 'pull' } } }).entreno.grupos, { a: 'pull' });
   }
+  // sincronización por partes
+  {
+    const base0 = normalize(makeTemplate()); base0.dias = { '2026-11-01': { hechos: { comida: true } } };
+    const hs = L.huellas(base0), copia = () => JSON.parse(JSON.stringify(base0));
+    const movil = copia(); movil.dias['2026-11-02'] = { hechos: { cena: true } }; movil.entreno.hora = '07:00';
+    const pc = copia(); pc.menu.horas.comida = '14:00'; pc.dias['2026-11-01'].hechos.cena = true;
+    const m = L.fusionar(movil, pc, hs); assert.deepEqual(m.conflictos, [], 'cambios en partes distintas se juntan sin preguntar');
+    assert.equal(m.datos.entreno.hora, '07:00'); assert.equal(m.datos.menu.horas.comida, '14:00'); assert.ok(m.datos.dias['2026-11-02'].hechos.cena && m.datos.dias['2026-11-01'].hechos.cena);
+    pc.entreno.hora = '20:00'; const c1 = L.fusionar(movil, pc, hs); assert.deepEqual(c1.conflictos, ['Entrenos'], 'la misma parte cambiada en los dos lados es conflicto');
+    assert.equal(L.fusionar(movil, pc, hs, 'nube').datos.entreno.hora, '20:00'); assert.equal(L.fusionar(movil, pc, hs, 'local').datos.entreno.hora, '07:00');
+    assert.equal(L.fusionar(movil, pc, hs, 'nube').datos.dias['2026-11-02'].hechos.cena, true, 'lo que no choca se conserva aunque elijas la nube');
+    const borra = copia(); delete borra.dias['2026-11-01']; assert.ok(!('2026-11-01' in L.fusionar(borra, copia(), hs).datos.dias), 'un día borrado en un lado se borra');
+    assert.equal(L.fusionar(movil, pc, null), null); assert.equal(L.huella({ a: 1, b: [1, 2] }), L.huella({ b: [1, 2], a: 1 }), 'la huella no depende del orden de las claves');
+  }
   // extras de la compra
   const c = makeTemplate(); c.extrasCompra = [{ id: 'x1', n: 'Papel de cocina', q: '2 packs', s: 'otros', ok: false }, { id: 'x2', n: 'Pollo extra', q: '', s: 'carne', ok: false }];
   const txt = L.textoCompra(c, 2); assert.ok(txt.includes('OTROS') && txt.includes('- Papel de cocina: 2 packs') && txt.includes('- Pollo extra'), 'copiar lista incluye extras');
