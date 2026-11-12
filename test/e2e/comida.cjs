@@ -54,7 +54,8 @@ const parseKcal = (t) => parseInt(t.replace(/\./g, '').match(/(\d+)\s*kcal/)[1],
   ok(txt.includes('Oikos') && txt.includes('Griego Natural (Cuisine & Co)'), 'Online: aparecen productos con datos útiles');
   ok(!txt.includes('Frambuesa'), 'Online: se descarta el producto sin calorías');
   ok(txt.includes('Open Food Facts'), 'Online: se cita la fuente');
-  await p.click('.res >> text=Cuisine'); await p.waitForTimeout(100);
+  await p.click('.res >> text=Cuisine'); await p.waitForTimeout(150);
+  if (await p.locator('#parecidos').count()) { ok(true, 'Se parece a uno propio: pregunta antes de crear otro'); await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(150); }   // "Es nuevo"
   ok(await p.locator('.itemrow .nm >> text=Griego Natural (Cuisine & Co)').count() >= 1, 'Un producto online se guarda como ingrediente propio y se añade');
   // ---- Código de barras ----
   await p.click('#anadir-alimento'); await p.fill('#buscar-alimento', '3017620422003'); await p.waitForSelector('.res:has-text("Nutella")', { timeout: 5000 }); ok(true, 'Código de barras: encuentra Nutella');

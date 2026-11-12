@@ -270,6 +270,13 @@ assert.equal(L.esVersionNueva('0.1.10', 'v0.1.9'), false);
     assert.ok(!('a2' in m.ingredientes) && m.ingredientes.a1.code === '123'); assert.deepEqual(m.platosPropios[0].items, [['a1', 400], ['arroz', 50]]); assert.deepEqual(m.platosPropios[1].items, [['a1', 150]], 'si un plato llevaba los dos, se suman');
     assert.deepEqual(m.menu.semanas[0][0].comida.items, [['a1', 400]]); assert.deepEqual(m.dias['2026-11-02'].cambios.comida.items, [['a1', 200]]); assert.deepEqual(m.compra.x.marcados, { a1: true });
   }
+  // ¿ya lo tenías?: parecidos a un producto nuevo
+  {
+    const m = normalize(makeTemplate()); m.ingredientes = { a: { n: 'Carne picada', u: 'g', k: 180, p: 19, s: 'carne' }, b: { n: 'Pavo (embutido)', u: 'g', k: 105, p: 22, s: 'carne' }, c: { n: 'Leche semidesnatada', u: 'ml', k: 46, p: 3, s: 'lacteos' }, d: { n: 'Arroz', u: 'g', k: 350, p: 7, s: 'despensa' } };
+    const ids = (n, u = 'g') => L.ingredientesParecidos(m, { n, u }).map((x) => x.id);
+    assert.deepEqual(ids('Carne picada mixta (Lidl)'), ['a']); assert.deepEqual(ids('Pechuga de pavo en lonchas (ElPozo)'), ['b']); assert.deepEqual(ids('Arroces redondos (SOS)'), ['d'], 'plurales');
+    assert.deepEqual(ids('Leche semidesnatada (Pascual)'), [], 'no se mezcla lo que se mide distinto'); assert.deepEqual(ids('Leche semidesnatada (Pascual)', 'ml'), ['c']); assert.deepEqual(ids('Chocolate negro'), []);
+  }
   // extras de la compra
   const c = makeTemplate(); c.extrasCompra = [{ id: 'x1', n: 'Papel de cocina', q: '2 packs', s: 'otros', ok: false }, { id: 'x2', n: 'Pollo extra', q: '', s: 'carne', ok: false }];
   const txt = L.textoCompra(c, 2); assert.ok(txt.includes('OTROS') && txt.includes('- Papel de cocina: 2 packs') && txt.includes('- Pollo extra'), 'copiar lista incluye extras');

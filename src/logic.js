@@ -345,3 +345,13 @@ export function unirIngredientes(data, de, a) {
   if (!y.code && x.code) y.code = x.code; if ((x.uso || 0) > (y.uso || 0)) y.uso = x.uso;
   delete data.ingredientes[de]; return true;
 }
+
+// ---- ¿este producto ya lo tienes con otro nombre? ----
+// Ingredientes tuyos que se parecen a un alimento nuevo: se miden igual y comparten alguna palabra con peso (sin marcas entre paréntesis ni palabras de relleno).
+const RELLENO = new Set(['para', 'con', 'sin', 'los', 'las', 'del', 'natural', 'light', 'bajo', 'baja', 'grasa', 'azucar', 'azucares', 'fresco', 'fresca', 'frescos', 'entero', 'entera', 'tipo', 'estilo', 'sabor', 'pack', 'extra', 'clasico', 'clasica', 'original']);
+const palabras = (n) => new Set(String(n || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\([^)]*\)/g, ' ').split(/[^a-z]+/).filter((w) => w.length >= 4 && !RELLENO.has(w)).map((w) => w.replace(/ces$/, 'z').replace(/s$/, '').replace(/e$/, '')));   // plurales: arroces → arroz, tomates → tomat
+export function ingredientesParecidos(data, a, max = 3) {
+  const pa = palabras(a.n); if (!pa.size) return [];
+  return Object.entries(data.ingredientes).filter(([, g]) => g.u === a.u).map(([id, g]) => { const pg = palabras(g.n); let comunes = 0; for (const w of pg) if (pa.has(w)) comunes++; return { id, g, comunes, peso: pg.size ? comunes / pg.size : 0 }; })
+    .filter((x) => x.comunes > 0).sort((x, y) => y.peso - x.peso || y.comunes - x.comunes || (y.g.uso || 0) - (x.g.uso || 0)).slice(0, max);
+}

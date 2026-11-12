@@ -26,7 +26,15 @@ export function buscarAlimento({ titulo = 'Añadir alimento', onPick }) {
   const q = h('input', { type: 'text', id: 'buscar-alimento', placeholder: 'Busca un alimento o escribe un código', autocomplete: 'off' });
   const lista = h('div', { class: 'stack', style: 'gap:16px' });
   let timer = null, seq = 0, online = { estado: 'idle', items: [] };
+  // Un producto de supermercado nuevo puede ser algo que ya tienes con otro nombre: se pregunta antes de crear otro
   const elegir = (a) => {
+    const parecidos = !a.id && a.origen === 'off' ? L.ingredientesParecidos(data, a) : [];
+    if (!parecidos.length) return usar(a);
+    const hoja = sheet({ title: '¿Ya lo tenías?', save: 'Es nuevo', cancel: 'Atrás', onSave: () => { usar(a); }, body: [
+      h('p', { class: 'mute small' }, `“${a.n}” se parece a algo que ya tienes. Si es lo mismo, elige el tuyo y no se creará otro.`),
+      h('div', { class: 'group', id: 'parecidos' }, parecidos.map(({ id, g }) => h('button', { type: 'button', class: 'row tap', onclick: () => { if (a.code && !g.code) g.code = a.code; hoja.close(); usar({ ...g, id }); } }, h('div', { class: 'grow' }, g.n, h('div', { class: 'sub num' }, macroPor100(g))), h('span', { class: 'chev' }, '›'))))] });
+  };
+  const usar = (a) => {
     let id = a.id;
     if (!id) { const base = L.slug(a.n) || 'alimento'; id = base; let c = 2; while (data.ingredientes[id]) id = `${base}-${c++}`; const { origen, ...ing } = a; data.ingredientes[id] = ing; }
     data.ingredientes[id].uso = Date.now(); commit();
