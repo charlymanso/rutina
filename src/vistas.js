@@ -57,6 +57,13 @@ export function viewCompra() {
     const txt = L.textoCompra(data, S.compSel);
     try { await navigator.clipboard.writeText(txt); toast('Lista copiada.'); } catch { const ta = h('textarea', { style: 'position:fixed;opacity:0' }); ta.value = txt; document.body.append(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); toast(ok ? 'Lista copiada.' : 'No se pudo copiar.'); }
   };
+  const aRecordatorios = async () => {
+    const ls = L.lineasCompra(data, S.compSel), txt = ls.join('\n'); if (!ls.length) return toast('No queda nada por comprar.');
+    let ok = true; try { await navigator.clipboard.writeText(txt); } catch { const ta = h('textarea', { style: 'position:fixed;opacity:0' }); ta.value = txt; document.body.append(ta); ta.select(); ok = document.execCommand('copy'); ta.remove(); }
+    if (!ok) return toast('No se pudo copiar.');
+    sheet({ title: 'Copiado', cancel: 'Entendido', body: [h('p', {}, `${ls.length} ${ls.length === 1 ? 'cosa copiada' : 'cosas copiadas'}, una por línea (solo lo que te falta por comprar).`),
+      h('ol', { class: 'guia-lista', id: 'recordatorios-pasos' }, h('li', {}, 'Abre Recordatorios y entra en tu lista de la compra.'), h('li', {}, 'Toca en un hueco vacío para empezar un recordatorio nuevo.'), h('li', {}, 'Mantén pulsado y elige Pegar: cada línea se convierte en un recordatorio.'))] });
+  };
   const secciones = L.SECC.map(([sc, nombre]) => {
     const its = ids.filter((i) => L.ing(data, i).s === sc).sort((a, b) => L.ing(data, a).n.localeCompare(L.ing(data, b).n, 'es')), xs = ex.filter((x) => x.s === sc); if (!its.length && !xs.length) return null;
     return h('section', { class: 'stack', style: 'gap:8px' }, h('h2', { class: 'sec', style: 'font-size:17px' }, nombre),
@@ -70,7 +77,7 @@ export function viewCompra() {
     h('div', { class: 'head' }, h('div', {}, h('h1', { class: 'title' }, 'Compra'), h('p', { class: 'subtitle num' }, `${hechos} de ${total} en el carro`)),
       seg([[2, 'Dos semanas'], [0, 'Esta semana'], [1, 'La que viene']], S.compSel, (v) => { S.compSel = v; render(); })),
     h('div', { class: 'head' }, L.hogar(data).length ? h('button', { class: 'btn plain', id: 'compra-hogar', style: 'padding-left:0;text-align:left', onclick: () => { go('ajustes'); irAj('hogar'); } }, `Para ti y ${nombresHogar()}`) : h('span'),
-      h('div', {}, h('button', { class: 'btn sec', onclick: copiar, disabled: !total }, 'Copiar lista'), ' ', h('button', { class: 'btn plain', onclick: () => { data.compra[k] = { marcados: {} }; data.extrasCompra.forEach((x) => { x.ok = false; }); commit(); }, disabled: !hechos }, 'Desmarcar todo'))),
+      h('div', {}, h('button', { class: 'btn sec', onclick: copiar, disabled: !total }, 'Copiar lista'), ' ', h('button', { class: 'btn plain', id: 'a-recordatorios', onclick: aRecordatorios, disabled: !total }, 'A Recordatorios'), ' ', h('button', { class: 'btn plain', onclick: () => { data.compra[k] = { marcados: {} }; data.extrasCompra.forEach((x) => { x.ok = false; }); commit(); }, disabled: !hechos }, 'Desmarcar todo'))),
     h('button', { class: 'btn sec', id: 'add-compra', style: 'align-self:flex-start', onclick: anadirCompra }, '+ Añadir a la lista'),
     total ? h('div', { class: 'shop' }, secciones) : h('div', { class: 'card empty' }, h('p', {}, 'Tu lista aparecerá aquí cuando añadas platos al menú o cosas por tu cuenta.'), h('button', { class: 'btn', onclick: () => go('semana') }, 'Ir al menú')));
 }

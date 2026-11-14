@@ -28,6 +28,8 @@ const ok = (c, t) => { console.log(c ? 'OK  ' : 'FALLO', t); if (!c) process.exi
   await p.click('text=Esta semana'); ok(await p.locator('.item.extra').count() === 2, 'Los extras siguen al cambiar de semana');
   await p.evaluate(() => { window.__t = null; navigator.clipboard.writeText = async (x) => { window.__t = x; }; }); await p.click('text=Copiar lista');
   const txt = await p.evaluate(() => window.__t); ok(txt.includes('- Papel de cocina: 2 packs') && txt.includes('- Pollo extra') && txt.includes('OTROS'), 'Copiar lista incluye los extras');
+  await p.evaluate(() => { window.__t = null; }); await p.click('#a-recordatorios'); await p.waitForSelector('#recordatorios-pasos'); const rec = await p.evaluate(() => window.__t);
+  ok(rec && rec.split('\n').length >= 5 && rec.split('\n').every((l) => l && !l.startsWith('-') && l !== l.toUpperCase()), 'A Recordatorios: copia una cosa por línea, sin títulos, y explica cómo pegarlo'); await p.locator('.sheet').last().locator('header .btn.plain').click();
   await p.click('text=Desmarcar todo'); ok(await p.locator('.item.extra[aria-pressed=true]').count() === 0, 'Desmarcar todo también los extras');
   const g = await p.evaluate(() => JSON.parse(localStorage.getItem('stub')).extrasCompra); ok(g.length === 2 && g[0].s === 'otros', 'Se guarda en los datos');
   await p.reload(); await p.waitForSelector('h1.title'); await p.click('nav >> text=Compra'); ok(await p.locator('.item.extra').count() === 2, 'Persisten tras recargar');

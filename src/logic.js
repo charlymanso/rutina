@@ -180,6 +180,16 @@ export function textoCompra(data, sel) {
   return out.join('\n').trim();
 }
 
+// Lo que falta por comprar, una línea por cosa y sin títulos: al pegarlo en Recordatorios del iPhone (o en Notas, Keep…) cada línea es un elemento.
+export function lineasCompra(data, sel) {
+  const tot = listaCompra(data, sel), marc = ((data.compra || {})[claveCompra(sel)] || {}).marcados || {}, out = [];
+  for (const [sc] of SECC) {
+    Object.keys(tot).filter((i) => ing(data, i).s === sc && !marc[i]).sort((a, b) => ing(data, a).n.localeCompare(ing(data, b).n, 'es')).forEach((i) => out.push(`${ing(data, i).n} (${cantidadCompra(data, i, tot[i])})`));
+    (data.extrasCompra || []).filter((x) => x.s === sc && !x.ok).forEach((x) => out.push(x.q ? `${x.n} (${x.q})` : x.n));
+  }
+  return out;
+}
+
 // ---- registros ----
 export const hechosDe = (data, f) => (data.dias[f] && data.dias[f].hechos) || {};
 // Otras sesiones sumadas al entreno de hoy ("bloques", p. ej. Brazo o Cardio además de Pecho). Solo valen ese día; el plan no cambia.

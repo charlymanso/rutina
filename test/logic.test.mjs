@@ -279,6 +279,8 @@ assert.equal(L.esVersionNueva('0.1.10', 'v0.1.9'), false);
   }
   // extras de la compra
   const c = makeTemplate(); c.extrasCompra = [{ id: 'x1', n: 'Papel de cocina', q: '2 packs', s: 'otros', ok: false }, { id: 'x2', n: 'Pollo extra', q: '', s: 'carne', ok: false }];
+  { const ls = L.lineasCompra(c, 2); assert.ok(ls.includes('Papel de cocina (2 packs)') && ls.includes('Pollo extra') && ls.every((x) => !x.startsWith('-') && x === x.trim()), 'para Recordatorios: una cosa por línea, sin títulos');
+    const n = ls.length; c.extrasCompra[0].ok = true; assert.equal(L.lineasCompra(c, 2).length, n - 1, 'lo ya comprado no se exporta'); c.extrasCompra[0].ok = false; }
   const txt = L.textoCompra(c, 2); assert.ok(txt.includes('OTROS') && txt.includes('- Papel de cocina: 2 packs') && txt.includes('- Pollo extra'), 'copiar lista incluye extras');
   // normalize arregla formas raras
   const roto = normalize({ perfil: { listo: true }, dias: { '2026-10-27': { cambios: 5, ejExtra: 'x', ejQuitar: {}, extras: 3 }, '2026-10-28': null, '2026-10-29': { cambios: { comida: { t: 'A', items: 'mal' }, cena: null } } }, extrasCompra: [null, { n: ' ', s: 'x' }, { n: 'Sal', s: 'inventada' }], platosPropios: [{ t: 'Bowl', items: [['arroz', 80], null] }, { t: '', items: [] }, 'x'] });
