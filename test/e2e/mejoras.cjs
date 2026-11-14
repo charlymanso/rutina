@@ -41,6 +41,13 @@ const guardar = async (p) => { await p.locator('.sheet').last().locator('header 
   ok(await p.locator('#ej-sug .row').count() === 1 && (await p.textContent('#ej-sug')).includes('3×8'), 'Al escribir sugiere tus ejercicios con sus series'); await p.locator('#ej-sug .row').first().click();
   ok((await p.inputValue('#ej-nombre')) === 'Hack squat' && (await p.inputValue('#ej-reps')) === '8', 'Elegirlo rellena nombre y series'); await p.locator('.sheet').last().locator('header .btn.plain').click();
   await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(300);
+  // elegir de entre los ejercicios del grupo
+  await p.click('#slot-gym'); await p.waitForSelector('#ej-elegir'); const antes = await p.locator('.ficha').count(); await p.click('#ej-elegir'); await p.waitForSelector('#elegir-lista');
+  ok(await p.locator('#elegir-lista .item[aria-pressed=true]').count() === antes && await p.locator('#elegir-hack-squat').getAttribute('aria-pressed') === 'false', 'Elegir ejercicios: salen los del grupo, marcados los de hoy (' + antes + ')');
+  await p.click('#elegir-hack-squat'); await p.waitForTimeout(200); const primero = p.locator('#elegir-lista .item[aria-pressed=true]').first(), idPrimero = await primero.getAttribute('id'); await primero.click(); await p.waitForTimeout(200);
+  ok((await p.textContent('#elegir-cuenta')).startsWith(String(antes) + ' '), 'Marcar uno y desmarcar otro deja ' + antes + ' para hoy'); await p.locator('.sheet').last().locator('header .btn.plain').click(); await p.waitForTimeout(200);
+  ok(await p.locator('#ficha-hack-squat').count() === 1 && await p.locator('#ficha-' + idPrimero.replace('elegir-', '')).count() === 0, 'El entreno de hoy queda con lo elegido');
+  await p.click('#ej-restaurar'); await p.waitForTimeout(200); await p.click('#quitar-hack-squat'); await p.waitForTimeout(300); await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); await p.waitForTimeout(300);
   // nota y vídeo
   await p.click('nav >> text=Ajustes'); await p.click('#aj-ejercicios'); await p.fill('#ejs-buscar', 'hack'); await p.locator('#ejs-lista .row').first().click(); await p.waitForSelector('#ej-nota');
   await p.fill('#ej-nota', 'Baja despacio'); await p.fill('#ej-video', 'no es un enlace'); await p.locator('.sheet').last().locator('header .btn:not(.plain)').click(); ok((await p.textContent('.sheet >> nth=-1')).includes('https://'), 'El vídeo tiene que ser un enlace');

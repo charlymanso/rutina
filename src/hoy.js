@@ -126,6 +126,29 @@ export function anadirEjercicio(f) {
   } });
 }
 /* Sumar otra sesión (un bloque: Brazo, Cardio…) al entreno de hoy: sale todo como un solo entreno y el plan no cambia. */
+/* Elegir qué haces hoy de entre todos tus ejercicios del grupo de la sesión (Pierna, Push…): se marcan y desmarcan; el plan no se toca. */
+export function elegirEjerciciosHoy(f) {
+  const d = L.parseISO(f), ses = L.sesionDelDia(data, d); if (!ses) return;
+  const grupos = new Set([ses, ...L.bloquesDelDia(data, d)].map((x) => L.grupoSesion(x.t)).filter((g) => g !== 'otros')), nombres = L.GRUPOS_EJ.filter(([g]) => grupos.has(g)).map(([, t]) => t);
+  const q = h('input', { type: 'search', id: 'elegir-buscar', placeholder: 'Buscar ejercicio', autocomplete: 'off' }), lista = h('div', { class: 'group', id: 'elegir-lista' }), cuenta = h('p', { class: 'mute small', id: 'elegir-cuenta' });
+  const alternar = (x, puesto) => {
+    const r = diaReg(f), enPlan = [ses, ...L.bloquesDelDia(data, d)].some((y) => y.ej.some((e) => L.slug(e.n) === x.k));
+    if (puesto) { if (r.ejExtra && r.ejExtra.some((e) => L.slug(e.n) === x.k)) { r.ejExtra = r.ejExtra.filter((e) => L.slug(e.n) !== x.k); if (!r.ejExtra.length) delete r.ejExtra; } else r.ejQuitar = [...(r.ejQuitar || []), x.k]; }
+    else if (enPlan) { r.ejQuitar = (r.ejQuitar || []).filter((k) => k !== x.k); if (!r.ejQuitar.length) delete r.ejQuitar; }
+    else (r.ejExtra ||= []).push({ n: x.n, s: x.s || '3×10', c: !!x.c });
+    commit(); pintar(); if (S.entrenoGrande) S.entrenoGrande();
+  };
+  function pintar() {
+    const hoy = new Set(L.ejerciciosDelDia(data, d).map((e) => L.slug(e.n))), t = normalizar(q.value.trim());
+    const todos = L.catalogoEjercicios(data).filter((x) => !grupos.size || grupos.has(x.grupo) || hoy.has(x.k)), vis = t ? todos.filter((x) => normalizar(x.n).includes(t)) : todos;
+    cuenta.textContent = `${hoy.size} ${hoy.size === 1 ? 'ejercicio' : 'ejercicios'} para hoy`;
+    lista.replaceChildren(...(vis.length ? vis.map((x) => h('button', { type: 'button', class: 'item', id: 'elegir-' + x.k, 'aria-pressed': String(hoy.has(x.k)), onclick: () => alternar(x, hoy.has(x.k)) },
+      h('span', { class: 'box', 'aria-hidden': 'true', 'aria-pressed': String(hoy.has(x.k)) }, icon('check')), h('span', { class: 'nm' }, h('span', { class: 'nm-t' }, x.n), h('small', { class: 'reparto' }, [x.s, x.ultimo ? `${L.kgTxt(x.ultimo.kg)} kg` : ''].filter(Boolean).join(' · ')))))
+      : [h('p', { class: 'mute small', style: 'padding:14px' }, 'Ningún ejercicio coincide.')]));
+  }
+  q.addEventListener('input', pintar); pintar();
+  sheet({ title: nombres.length ? `Ejercicios de ${nombres.join(' y ')}` : 'Tus ejercicios', cancel: 'Listo', body: [cuenta, q, lista, h('p', { class: 'mute small' }, 'Marca lo que vas a hacer hoy. Solo cambia hoy: tu sesión del plan sigue igual.')] });
+}
 export function anadirBloque(f) {
   const d = L.parseISO(f), ses = L.sesionDelDia(data, d); if (!ses) return;
   const ya = new Set([ses.id, ...L.bloquesDelDia(data, d).map((x) => x.id)]), opciones = data.entreno.sesiones.filter((x) => !ya.has(x.id));
@@ -212,7 +235,7 @@ export function abrirEntrenoHoy(f) {
         ...(mios.length ? fichas(ses, reg, mios) : [h('p', { class: 'mute small', style: 'padding-left:4px' }, 'Todos sus ejercicios están quitados de hoy.')])]; }),
       ...fichas(ses, reg, ejs.filter((e) => e.extra)),
       h('p', { class: 'hint-swipe mute small' }, 'Desliza un ejercicio hacia la izquierda para quitarlo de hoy.'),
-      h('div', { class: 'row', style: 'padding:0;min-height:0;flex-wrap:wrap;gap:4px 12px' }, h('button', { class: 'btn sec', id: 'ej-anadir', onclick: () => anadirEjercicio(f) }, '+ Añadir ejercicio'), h('button', { class: 'btn sec', id: 'bloque-anadir', onclick: () => anadirBloque(f) }, '+ Añadir otra sesión'),
+      h('div', { class: 'row', style: 'padding:0;min-height:0;flex-wrap:wrap;gap:4px 12px' }, h('button', { class: 'btn sec', id: 'ej-elegir', onclick: () => elegirEjerciciosHoy(f) }, 'Elegir ejercicios'), h('button', { class: 'btn sec', id: 'ej-anadir', onclick: () => anadirEjercicio(f) }, '+ Nuevo'), h('button', { class: 'btn sec', id: 'bloque-anadir', onclick: () => anadirBloque(f) }, '+ Añadir otra sesión'),
         quitados.length ? h('button', { class: 'btn plain', id: 'ej-restaurar', onclick: () => { delete diaReg(f).ejQuitar; commit(); pintar(); } }, `Restaurar ${quitados.length} quitado${quitados.length === 1 ? '' : 's'}`) : null),
       h('div', { class: 'stack', style: 'gap:8px' },
         terminado ? h('button', { class: 'btn sec wide', id: 'entreno-reabrir', onclick: () => { toggleHecho(f, 'gym'); pintar(); } }, 'Entreno completado ✓ · Marcar como pendiente')
